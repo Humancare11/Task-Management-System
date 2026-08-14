@@ -1,11 +1,29 @@
-export default function FormField({ label, ...props }) {
+export default function FormField({
+  label,
+  type = "text",
+  name,
+  value,
+  onChange,
+  placeholder,
+  required,
+  minLength,
+}) {
   return (
-    <label className="block mb-4">
-      <span className="block text-sm font-medium text-ink mb-1.5">{label}</span>
+    <div className="mb-4">
+      <label htmlFor={name} className="block text-sm text-white/80 mb-1.5">
+        {label}
+      </label>
       <input
-        {...props}
-        className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-ink placeholder:text-slate-400 focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-colors"
+        id={name}
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        minLength={minLength}
+        className="w-full rounded-lg bg-white/10 border border-white/10 text-white placeholder-white/40 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/40 focus:bg-white/[0.15] transition-colors"
       />
-    </label>
+    </div>
   );
 }

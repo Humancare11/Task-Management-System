@@ -9,34 +9,50 @@ const User = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
-    organization_id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-    },
+
     first_name: {
       type: DataTypes.STRING(100),
       allowNull: false,
     },
+
     last_name: {
       type: DataTypes.STRING(100),
+      allowNull: true,
     },
+
     email: {
       type: DataTypes.STRING(190),
       allowNull: false,
       unique: true,
-      validate: { isEmail: true },
+      validate: {
+        isEmail: true,
+      },
     },
-    password_hash: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
+
+    phone: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
     },
-    role: {
-      type: DataTypes.ENUM("owner", "admin", "manager", "member", "client"),
-      defaultValue: "member",
+
+    avatar_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
     },
+
+    email_verified_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+
     is_active: {
       type: DataTypes.BOOLEAN,
+      allowNull: false,
       defaultValue: true,
+    },
+
+    last_login_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {

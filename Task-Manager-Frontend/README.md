@@ -1,4 +1,4 @@
-# Flowboard — Frontend
+# Humancare Connect — Frontend
 
 ## Setup
 
@@ -6,11 +6,13 @@
    — the login/register forms call it directly.
 
 2. Install dependencies:
+
    ```bash
    npm install
    ```
 
 3. Start the dev server:
+
    ```bash
    npm run dev
    ```

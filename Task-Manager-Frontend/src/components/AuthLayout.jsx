@@ -1,36 +1,55 @@
-import { Link } from "react-router-dom";
-import BoardIllustration from "./BoardIllustration.jsx";
+import loginImg from "../Assets/images/login-img.svg";
 
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
-    <div className="min-h-screen grid md:grid-cols-2">
-      {/* Left — brand panel */}
-      <div className="hidden md:flex flex-col justify-between bg-ink text-white p-12">
-        <Link to="/" className="text-xl font-display font-extrabold tracking-tight">
-          Flowboard
-        </Link>
+    <div className="min-h-screen w-full  flex items-center justify-center bg-white px-6 py-16">
+      <div className="w-full max-w-7xl grid md:grid-cols-2 gap-28 items-center">
+        {/* Left: brand + illustration */}
+        <div className="hidden md:flex flex-col items-center text-center gap-6">
+          <div className="w-14 h-14 rounded-xl border-2 border-black flex items-center justify-center">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="black"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+          </div>
 
-        <div>
-          <BoardIllustration />
-          <h2 className="mt-8 text-3xl font-display font-bold leading-tight max-w-sm">
-            Plan the work. See it move.
-          </h2>
-          <p className="mt-3 text-white/60 max-w-sm">
-            Projects, tasks, and timelines for teams who'd rather ship than
-            manage spreadsheets.
-          </p>
+          <h1 className="text-3xl font-semibold text-black leading-snug">
+            Humancare Connect Makes
+            <br />
+            Task Management Better
+          </h1>
+
+          {/* Replace this src with your own illustration */}
+          <img
+            src={loginImg}
+            alt="Illustration"
+            className="w-full max-w-md rounded-lg"
+          />
         </div>
 
-        <p className="text-white/40 text-sm">© {new Date().getFullYear()} Flowboard</p>
-      </div>
+        {/* Right: form card */}
+        <div className="w-full bg-zinc-800 rounded-2xl px-8 py-10 sm:px-12 sm:py-12">
+          <h2 className="text-3xl font-semibold text-white text-center mb-2">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="text-center text-white/60 text-sm mb-8">{subtitle}</p>
+          )}
 
-      {/* Right — form panel */}
-      <div className="flex items-center justify-center p-8">
-        <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-display font-bold text-ink">{title}</h1>
-          {subtitle && <p className="mt-2 text-slate-500">{subtitle}</p>}
-          <div className="mt-8">{children}</div>
-          {footer && <div className="mt-6 text-sm text-slate-500">{footer}</div>}
+          {children}
+
+          {footer && (
+            <p className="text-center text-white/60 text-sm mt-6">{footer}</p>
+          )}
         </div>
       </div>
     </div>

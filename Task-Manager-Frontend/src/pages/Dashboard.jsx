@@ -1,34 +1,76 @@
+import { FolderKanban, ListChecks, UserCheck, Users, Plus } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
+import AppLayout from "../components/layout/AppLayout.jsx";
+import PageHeader from "../components/ui/PageHeader.jsx";
+import Button from "../components/ui/Button.jsx";
+import StatCard from "../components/dashboard/StatCard.jsx";
+import QuickActions from "../components/dashboard/QuickActions.jsx";
+import ProjectOverview from "../components/dashboard/ProjectOverview.jsx";
+import MyTasks from "../components/dashboard/MyTasks.jsx";
+import RecentActivity from "../components/dashboard/RecentActivity.jsx";
+import TeamSnapshot from "../components/dashboard/TeamSnapshot.jsx";
+
+// Stat values are placeholders — no dashboard-statistics API exists yet.
+const stats = [
+  {
+    label: "Active Projects",
+    icon: FolderKanban,
+    value: "--",
+    description: "Projects will appear here once you create them.",
+  },
+  {
+    label: "Open Tasks",
+    icon: ListChecks,
+    value: "--",
+    description: "Tasks across your workspace will appear here.",
+  },
+  {
+    label: "My Tasks",
+    icon: UserCheck,
+    value: "--",
+    description: "Tasks assigned to you will appear here.",
+  },
+  {
+    label: "Team Members",
+    icon: Users,
+    value: "--",
+    description: "See who's in your organization below.",
+  },
+];
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between px-8 py-4 border-b border-slate-200 bg-white">
-        <span className="text-lg font-display font-bold text-ink">Flowboard</span>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-slate-500">
-            {user?.first_name} · {user?.role}
-          </span>
-          <button
-            onClick={logout}
-            className="text-sm font-medium text-ink border border-slate-200 px-3.5 py-1.5 rounded-lg hover:border-accent transition-colors"
-          >
-            Log out
-          </button>
-        </div>
-      </header>
+    <AppLayout title="Dashboard">
+      <div className="space-y-6">
+        <PageHeader
+          title={`Welcome back, ${user?.first_name ?? ""} \u{1F44B}`}
+          description="Here's what's happening in your workspace."
+          actions={
+            <Button icon={Plus} disabled title="Coming soon">
+              Create Project
+            </Button>
+          }
+        />
 
-      <main className="p-8">
-        <h1 className="text-2xl font-display font-bold text-ink">
-          Welcome, {user?.first_name} 👋
-        </h1>
-        <p className="mt-2 text-slate-500">
-          This is your dashboard shell — projects and task boards get built
-          here next.
-        </p>
-      </main>
-    </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat) => (
+            <StatCard key={stat.label} {...stat} />
+          ))}
+        </div>
+
+        <QuickActions />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <ProjectOverview />
+          <MyTasks />
+        </div>
+
+        <RecentActivity />
+
+        <TeamSnapshot />
+      </div>
+    </AppLayout>
   );
 }
