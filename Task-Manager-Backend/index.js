@@ -8,6 +8,7 @@ const authRoutes = require("./routes/authRoutes");
 const organizationRoutes = require("./routes/organizationRoutes");
 const passport = require("./config/passport");
 const OrganizationInvitation = require("./models/OrganizationInvitation");
+const projectRoutes = require("./routes/projectRoutes");
 
 const app = express();
 
@@ -35,6 +36,8 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/organization", organizationRoutes);
+app.use("/api/projects", projectRoutes);
+
 
 const PORT = process.env.PORT || 5000;
 

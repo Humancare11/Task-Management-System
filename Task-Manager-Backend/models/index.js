@@ -4,6 +4,8 @@ const AuthIdentity = require("./AuthIdentity");
 const OrganizationMember = require("./OrganizationMember");
 const OrganizationInvitation = require("./OrganizationInvitation");
 const Project = require("./Project");
+const ProjectMember = require("./ProjectMember");
+const Task = require("./Task");
 
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
@@ -97,6 +99,72 @@ Project.belongsTo(User, {
   as: "creator",
 });
 
+// Project ↔ ProjectMember
+Project.hasMany(ProjectMember, {
+  foreignKey: "project_id",
+  as: "members",
+});
+
+ProjectMember.belongsTo(Project, {
+  foreignKey: "project_id",
+  as: "project",
+});
+
+// User ↔ ProjectMember
+User.hasMany(ProjectMember, {
+  foreignKey: "user_id",
+  as: "projectMemberships",
+});
+
+ProjectMember.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user",
+});
+
+
+// Project ↔ Task
+Project.hasMany(Task, {
+  foreignKey: "project_id",
+  as: "tasks",
+});
+
+Task.belongsTo(Project, {
+  foreignKey: "project_id",
+  as: "project",
+});
+
+// Organization ↔ Task
+Organization.hasMany(Task, {
+  foreignKey: "organization_id",
+  as: "tasks",
+});
+
+Task.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// User ↔ Task (assigned user)
+User.hasMany(Task, {
+  foreignKey: "assigned_to",
+  as: "assignedTasks",
+});
+
+Task.belongsTo(User, {
+  foreignKey: "assigned_to",
+  as: "assignee",
+});
+
+// User ↔ Task (creator)
+User.hasMany(Task, {
+  foreignKey: "created_by",
+  as: "createdTasks",
+});
+
+Task.belongsTo(User, {
+  foreignKey: "created_by",
+  as: "creator",
+});
 module.exports = {
   User,
   Organization,
@@ -104,4 +172,6 @@ module.exports = {
   OrganizationMember,
   OrganizationInvitation,
   Project,
+  ProjectMember,
+  Task,
 };
