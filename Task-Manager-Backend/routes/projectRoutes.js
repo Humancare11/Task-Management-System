@@ -59,22 +59,42 @@ router.delete(
 );
 
 // Create task under a project
-router.post("/:projectId/tasks", createTask);
+router.post(
+  "/:projectId/tasks",
+  requireRole("owner", "admin", "manager", "member"),
+  createTask
+);
 
 // Get all tasks under a project
 router.get("/:projectId/tasks", getProjectTasks);
 
 // Get single task under a project
-router.get("/:projectId/tasks/:taskId", getTaskById);
+router.get(
+  "/:projectId/tasks/:taskId",
+  requireRole("owner", "admin", "manager", "member", "client"),
+  getTaskById
+);
 
 // Update task under a project
-router.put("/:projectId/tasks/:taskId", updateTask);
+router.put(
+  "/:projectId/tasks/:taskId",
+  requireRole("owner", "admin", "manager"),
+  updateTask
+);
 
 // Delete task under a project
-router.delete("/:projectId/tasks/:taskId", deleteTask);
+router.delete(
+  "/:projectId/tasks/:taskId",
+  requireRole("owner", "admin", "manager"),
+  deleteTask
+);
 
 // Get single project
-router.get("/:id", getProjectById);
+router.get(
+  "/:id",
+  requireRole("owner", "admin", "manager", "member", "client"),
+  getProjectById
+);
 
 // Update project
 router.put(

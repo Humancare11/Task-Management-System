@@ -492,3 +492,8 @@ Set `.env` with production database credentials, a strong `JWT_SECRET`/`SESSION_
 - `docs/` contains earlier architecture/database/auth analysis notes. Some of it (e.g. references to a "critical finding" about broken auth) describes a **past** state of the code — the current [authController.js](Task-Manager-Backend/controllers/authController.js) already implements `AuthIdentity`, `OrganizationMember`, and Google OAuth correctly. Treat `docs/*.md` as historical context, not a live spec.
 - No automated tests or linting are currently configured for either package.
 - No seeders exist — after migrations, the database is empty; register a new company through the UI/API to get started.
+
+
+Member 7 credentials:
+projectmember@gmail.com
+Test@12345

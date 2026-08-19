@@ -79,7 +79,6 @@ exports.getProjectById = async (req, res) => {
         message: "Project not found.",
       });
     }
-
     return res.json({
       project,
     });
@@ -95,8 +94,6 @@ exports.getProjectById = async (req, res) => {
 // GET /api/projects/:id/members
 exports.getProjectMembers = async (req, res) => {
   try {
-    console.log("Project members params:", req.params);
-    console.log("User:", req.user);
     const project = await Project.findOne({
       where: {
         id: req.params.id,
