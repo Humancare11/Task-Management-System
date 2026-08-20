@@ -8,6 +8,7 @@ export default function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   loading = false,
   variant = "danger",
 }) {
@@ -20,7 +21,7 @@ export default function ConfirmDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={loading}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button variant={variant} onClick={onConfirm} disabled={loading}>
             {loading ? "Please wait..." : confirmLabel}

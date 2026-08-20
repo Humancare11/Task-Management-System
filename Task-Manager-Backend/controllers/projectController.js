@@ -595,7 +595,74 @@ exports.updateTask = async (req, res) => {
       });
     }
 
-    // 3. Validate title if provided
+    const isOwnerOrAdmin = ["owner", "admin"].includes(req.user.role);
+
+    const isAssignedMember =
+      task.assigned_to === req.user.id &&
+      ["manager", "member"].includes(req.user.role);
+
+    // 3. Check whether the user has permission to update this task
+    if (!isOwnerOrAdmin && !isAssignedMember) {
+      return res.status(403).json({
+        message: "You do not have permission to update this task.",
+      });
+    }
+
+    // ============================================================
+    // ASSIGNED MEMBER
+    // Can ONLY update task status
+    // ============================================================
+
+    if (!isOwnerOrAdmin && isAssignedMember) {
+      const allowedStatuses = [
+        "todo",
+        "in_progress",
+        "review",
+        "completed",
+      ];
+
+      if (status === undefined) {
+        return res.status(400).json({
+          message: "Assigned members can only update task status.",
+        });
+      }
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          message: "Invalid task status.",
+        });
+      }
+
+      // Prevent member from modifying any other field
+      const hasOtherChanges =
+        title !== undefined ||
+        description !== undefined ||
+        priority !== undefined ||
+        assigned_to !== undefined ||
+        due_date !== undefined;
+
+      if (hasOtherChanges) {
+        return res.status(403).json({
+          message: "You can only update the task status.",
+        });
+      }
+
+      task.status = status;
+
+      await task.save();
+
+      return res.json({
+        message: "Task status updated successfully.",
+        task,
+      });
+    }
+
+    // ============================================================
+    // OWNER / ADMIN
+    // Can update the complete task
+    // ============================================================
+
+    // 4. Validate title if provided
     if (title !== undefined) {
       if (!title.trim()) {
         return res.status(400).json({
@@ -606,12 +673,25 @@ exports.updateTask = async (req, res) => {
       task.title = title.trim();
     }
 
-    // 4. Update fields
+    // 5. Update fields
     if (description !== undefined) {
       task.description = description;
     }
 
     if (status !== undefined) {
+      const allowedStatuses = [
+        "todo",
+        "in_progress",
+        "review",
+        "completed",
+      ];
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          message: "Invalid task status.",
+        });
+      }
+
       task.status = status;
     }
 
@@ -623,7 +703,7 @@ exports.updateTask = async (req, res) => {
       task.due_date = due_date;
     }
 
-    // 5. Validate new assignee
+    // 6. Validate new assignee
     if (assigned_to !== undefined) {
       if (assigned_to === null) {
         task.assigned_to = null;
@@ -659,6 +739,7 @@ exports.updateTask = async (req, res) => {
     });
   }
 };
+
 
 // DELETE /api/projects/:projectId/tasks/:taskId
 exports.deleteTask = async (req, res) => {

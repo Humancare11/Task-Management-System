@@ -5,6 +5,7 @@ import Register from "./pages/Register.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import OAuthSuccess from "./pages/OAuthSuccess.jsx";
+import AcceptInvitation from "./pages/auth/AcceptInvitation.jsx";
 import Projects from "./pages/projects/Projects.jsx";
 import CreateProject from "./pages/projects/CreateProject.jsx";
 import ProjectDetails from "./pages/projects/ProjectDetails.jsx";
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/oauth-success" element={<OAuthSuccess />} />
+      <Route path="/accept-invitation" element={<AcceptInvitation />} />
       <Route
         path="/dashboard"
         element={

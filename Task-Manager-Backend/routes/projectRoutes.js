@@ -76,10 +76,9 @@ router.get(
 );
 
 // Update task under a project
-router.put(
-  "/:projectId/tasks/:taskId",
-  requireRole("owner", "admin", "manager"),
-  updateTask
+router.put( "/:projectId/tasks/:taskId", 
+  requireRole("owner", "admin", "manager", "member"), 
+  updateTask 
 );
 
 // Delete task under a project

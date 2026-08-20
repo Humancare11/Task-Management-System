@@ -8,7 +8,7 @@ exports.createInvitation = async (req, res) => {
 
     const allowedRoles = ["admin", "manager", "member", "client"];
 
-    if (!email || !email.trim()) {
+     if (!email || !email.trim()) {
       return res.status(400).json({
         message: "Email is required.",
       });
@@ -68,7 +68,7 @@ exports.createInvitation = async (req, res) => {
       expires_at: expiresAt,
     });
 
-    return res.status(201).json({
+    const response = {
       message: "Invitation created successfully.",
       invitation: {
         id: invitation.id,
@@ -77,7 +77,14 @@ exports.createInvitation = async (req, res) => {
         status: invitation.status,
         expires_at: invitation.expires_at,
       },
-    });
+    };
+
+    if (process.env.NODE_ENV !== "production") {
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      response.invitation_link = `${frontendUrl}/accept-invitation?token=${token}`;
+    }
+
+    return res.status(201).json(response);
   } catch (error) {
     console.error("Create invitation error:", error);
 
