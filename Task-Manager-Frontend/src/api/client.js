@@ -1,8 +1,12 @@
 import axios from "axios";
 
-export const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api"
-).replace(/\/+$/, "");
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+
+if (!configuredApiUrl) {
+  throw new Error("VITE_API_URL is required to connect to the backend.");
+}
+
+export const API_BASE_URL = configuredApiUrl.replace(/\/+$/, "");
 
 export const API_ORIGIN = API_BASE_URL.endsWith("/api")
   ? API_BASE_URL.slice(0, -4)
