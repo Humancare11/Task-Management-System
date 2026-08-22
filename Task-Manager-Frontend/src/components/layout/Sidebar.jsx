@@ -19,7 +19,7 @@ export default function Sidebar({ open, onClose }) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col transform bg-ink text-white transition-all duration-200 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col transform bg-ink text-white transition-all duration-200 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? "lg:w-[76px]" : "w-64 lg:w-64"}`}
       >

@@ -76,6 +76,13 @@ router.get(
   getMyTasks
 );
 
+// Get subtasks assigned to the logged-in user
+router.get(
+  "/my-subtasks",
+  requireRole("owner", "admin", "manager", "member", "client"),
+  getMySubtasks
+);
+
 // Get all tasks under a project
 router.get(
   "/:projectId/tasks",
@@ -244,20 +251,6 @@ router.delete(
   "/:projectId/tasks/:taskId/subtasks/:subtaskId/attachments/:attachmentId",
   requireRole("owner", "admin", "manager", "member"),
   deleteAttachment
-);
-
-
-// Get tasks assigned to the logged-in user
-router.get( "/my-tasks",
-  requireRole("owner", "admin", "manager", "member", "client"),
-  getMyTasks
-);
-
-// Get subtasks assigned to the logged-in user
-router.get(
-  "/my-subtasks",
-  requireRole("owner", "admin", "manager", "member", "client"),
-  getMySubtasks
 );
 
 module.exports = router;

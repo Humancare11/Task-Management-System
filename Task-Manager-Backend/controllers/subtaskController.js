@@ -68,14 +68,6 @@ exports.createSubtask = async (req, res) => {
       });
     }
 
-    console.log("SUBTASK DEBUG:", {
-  projectId,
-  taskId,
-  userId: req.user.id,
-  organizationId: req.user.organization_id,
-  role: req.user.role,
-});
-
     // 2. Verify project belongs to current organization
     const project = await Project.findOne({
       where: {

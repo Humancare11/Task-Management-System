@@ -40,7 +40,6 @@ import {
 } from "../../api/comments.js";
 import {
   listSubtasks,
-  createSubtask,
   updateSubtask,
   deleteSubtask,
 } from "../../api/subtasks.js";
@@ -135,13 +134,6 @@ export default function TaskDetails() {
   const [subtaskToDelete, setSubtaskToDelete] = useState(null); // subtask object
   const [expandedSubtaskId, setExpandedSubtaskId] = useState(null);
 
-  // ── add-subtask inline form ──
-  const [addingSubtask, setAddingSubtask] = useState(false);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
-  const [newSubtaskSaving, setNewSubtaskSaving] = useState(false);
-  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState("");
-  const addInputRef = useRef(null);
-
   // ── attachment state ──
   const [attachments, setAttachments] = useState([]);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
@@ -233,13 +225,6 @@ export default function TaskDetails() {
     };
   }, [taskId]);
 
-  // Focus add-input when form opens
-  useEffect(() => {
-    if (addingSubtask) {
-      setTimeout(() => addInputRef.current?.focus(), 50);
-    }
-  }, [addingSubtask]);
-
   // ─── task actions ─────────────────────────────────────────────────────────
 
   function handleDelete() {
@@ -323,42 +308,6 @@ export default function TaskDetails() {
       .finally(() =>
         setSubtaskUpdating((prev) => ({ ...prev, [subtask.id]: false })),
       );
-  }
-
-  /** Save the inline new-subtask form */
-  function handleAddSubtask() {
-    const title = newSubtaskTitle.trim();
-    if (!title) return;
-
-    setNewSubtaskSaving(true);
-
-    createSubtask(projectId, taskId, {
-      title,
-      assigned_to: newSubtaskAssignee ? Number(newSubtaskAssignee) : null,
-    })
-      .then((res) => {
-        setSubtasks((prev) =>
-          prev.some((s) => s.id === res.data.subtask.id)
-            ? prev
-            : [...prev, res.data.subtask],
-        );
-        setNewSubtaskTitle("");
-        setNewSubtaskAssignee("");
-        setAddingSubtask(false);
-        toast.success("Subtask created.");
-      })
-      .catch((err) =>
-        toast.error(err.response?.data?.message || "Failed to create subtask."),
-      )
-      .finally(() => setNewSubtaskSaving(false));
-  }
-
-  function handleAddSubtaskKeyDown(e) {
-    if (e.key === "Enter") handleAddSubtask();
-    if (e.key === "Escape") {
-      setAddingSubtask(false);
-      setNewSubtaskTitle("");
-    }
   }
 
   /** Confirm-delete a subtask */
@@ -829,7 +778,7 @@ export default function TaskDetails() {
                     )}
 
                     {/* Subtask list */}
-                    {subtasks.length === 0 && !addingSubtask && (
+                    {subtasks.length === 0 && (
                       <div className="py-6 text-center">
                         <p className="text-sm text-slate-400">
                           No subtasks yet.
@@ -1033,82 +982,19 @@ export default function TaskDetails() {
                       </div>
                     )}
 
-                    {/* Inline add form */}
-                    {addingSubtask ? (
-                      <div className="mt-3 space-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
-                        {/* Title row */}
-                        <div className="flex items-center gap-2">
-                          <Plus size={14} className="shrink-0 text-sky-400" />
-                          <input
-                            ref={addInputRef}
-                            type="text"
-                            value={newSubtaskTitle}
-                            onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                            onKeyDown={handleAddSubtaskKeyDown}
-                            placeholder="Subtask title…"
-                            disabled={newSubtaskSaving}
-                            className="flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none"
-                          />
-                        </div>
-
-                        {/* Assignee + actions row */}
-                        <div className="flex items-center gap-2 pl-5">
-                          <select
-                            value={newSubtaskAssignee}
-                            onChange={(e) =>
-                              setNewSubtaskAssignee(e.target.value)
-                            }
-                            disabled={newSubtaskSaving}
-                            className="flex-1 rounded border border-sky-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none focus:border-sky-400"
-                          >
-                            <option value="">Assign to… (optional)</option>
-                            {members.map((m) => {
-                              const person = m.user || m;
-                              return (
-                                <option key={person.id} value={person.id}>
-                                  {`${person.first_name || ""} ${person.last_name || ""}`.trim() ||
-                                    person.email}
-                                </option>
-                              );
-                            })}
-                          </select>
-
-                          <button
-                            type="button"
-                            onClick={handleAddSubtask}
-                            disabled={
-                              !newSubtaskTitle.trim() || newSubtaskSaving
-                            }
-                            className="rounded px-2 py-1 text-xs font-semibold text-sky-600 transition hover:bg-sky-100 disabled:opacity-40"
-                          >
-                            {newSubtaskSaving ? "Saving…" : "Save"}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddingSubtask(false);
-                              setNewSubtaskTitle("");
-                              setNewSubtaskAssignee("");
-                            }}
-                            className="rounded px-2 py-1 text-xs text-slate-400 transition hover:bg-slate-100"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Add button — management roles only */
-                      canManage && (
-                        <button
-                          type="button"
-                          onClick={() => setAddingSubtask(true)}
-                          className="mt-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400 transition hover:border-slate-300 hover:text-slate-600"
-                        >
-                          <Plus size={14} />
-                          Add subtask
-                        </button>
-                      )
+                    {/* Add button — management roles only */}
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSubtask(null);
+                          setSubtaskModalOpen(true);
+                        }}
+                        className="mt-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400 transition hover:border-slate-300 hover:text-slate-600"
+                      >
+                        <Plus size={14} />
+                        Add subtask
+                      </button>
                     )}
                   </div>
                 )}

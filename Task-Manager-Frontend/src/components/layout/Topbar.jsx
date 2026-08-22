@@ -5,7 +5,7 @@ import NotificationBell from "./NotificationBell.jsx";
 
 export default function Topbar({ title, onMenuClick }) {
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-8">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-8">
       <div className="flex min-w-0 items-center gap-3">
         <button
           onClick={onMenuClick}
