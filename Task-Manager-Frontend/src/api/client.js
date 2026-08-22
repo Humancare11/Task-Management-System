@@ -1,7 +1,10 @@
 import axios from "axios";
 
+export const API_BASE_URL =
+  "https://darkviolet-cobra-939760.hostingersite.com/api";
+
 const api = axios.create({
-  baseURL: "https://darkviolet-cobra-939760.hostingersite.com/api",
+  baseURL: API_BASE_URL,
 });
 
 // Attach the JWT to every request automatically
