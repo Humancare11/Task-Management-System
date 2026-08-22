@@ -1,6 +1,7 @@
-import { Menu, Bell } from "lucide-react";
+import { Menu } from "lucide-react";
 import SearchInput from "../ui/SearchInput.jsx";
 import UserMenu from "./UserMenu.jsx";
+import NotificationBell from "./NotificationBell.jsx";
 
 export default function Topbar({ title, onMenuClick }) {
   return (
@@ -13,7 +14,9 @@ export default function Topbar({ title, onMenuClick }) {
         >
           <Menu size={20} />
         </button>
-        <h1 className="truncate text-lg font-display font-bold text-ink">{title}</h1>
+        <h1 className="truncate text-lg font-display font-bold text-ink">
+          {title}
+        </h1>
       </div>
 
       <div className="flex items-center gap-3">
@@ -22,12 +25,7 @@ export default function Topbar({ title, onMenuClick }) {
           className="hidden w-64 md:block"
           disabled
         />
-        <button
-          className="rounded-md p-2 text-slate-500 hover:bg-slate-100"
-          aria-label="Notifications"
-        >
-          <Bell size={18} />
-        </button>
+        <NotificationBell />
         <UserMenu />
       </div>
     </header>

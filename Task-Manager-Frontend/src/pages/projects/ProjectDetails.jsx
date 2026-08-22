@@ -32,6 +32,7 @@ import TaskFormModal from "../../components/tasks/TaskFormModal.jsx";
 import { getProject, deleteProject } from "../../api/projects.js";
 import { listTasks, deleteTask } from "../../api/tasks.js";
 import { listProjectMembers } from "../../api/projectMembers.js";
+import { getSocket } from "../../lib/socket.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
@@ -139,6 +140,32 @@ export default function ProjectDetails() {
   useEffect(() => {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.emit("project:join", projectId);
+
+    function handleTaskCreated(task) {
+      setTasks((prev) => [task, ...prev]);
+    }
+    function handleTaskUpdated(task) {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+    }
+    function handleTaskDeleted({ taskId }) {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    }
+
+    socket.on("task:created", handleTaskCreated);
+    socket.on("task:updated", handleTaskUpdated);
+    socket.on("task:deleted", handleTaskDeleted);
+
+    return () => {
+      socket.emit("project:leave", projectId);
+      socket.off("task:created", handleTaskCreated);
+      socket.off("task:updated", handleTaskUpdated);
+      socket.off("task:deleted", handleTaskDeleted);
+    };
   }, [projectId]);
 
   function refetchTasks() {
@@ -267,6 +294,14 @@ export default function ProjectDetails() {
     return (
       <AppLayout title="Project Details">
         <ErrorState message={error} onRetry={fetchAll} />
+      </AppLayout>
+    );
+  }
+
+  if (!project) {
+    return (
+      <AppLayout title="Project Details">
+        <ErrorState message="Project not found." onRetry={fetchAll} />
       </AppLayout>
     );
   }

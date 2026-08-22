@@ -1,4 +1,5 @@
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const session = require("express-session");
 require("dotenv").config();
@@ -10,11 +11,15 @@ const passport = require("./config/passport");
 const OrganizationInvitation = require("./models/OrganizationInvitation");
 const projectRoutes = require("./routes/projectRoutes");
 const invitationRoutes = require("./routes/invitationRoutes");
+const { initSocket } = require("./socket");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/uploads", require("express").static(require("path").join(__dirname, "uploads")));
 
 app.use(
   session({
@@ -39,13 +44,16 @@ app.use("/api/auth", authRoutes);
 app.use("/api/organization", organizationRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/invitations", invitationRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 const PORT = process.env.PORT || 5000;
+const server = http.createServer(app);
+initSocket(server);
 
 async function start() {
   await connectDB();
 
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
   });
 }

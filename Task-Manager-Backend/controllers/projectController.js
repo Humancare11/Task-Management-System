@@ -1,4 +1,30 @@
-const { Project, ProjectMember, User, Task } = require("../models");
+const { Project, ProjectMember, User, Task, Tag } = require("../models");
+const { createNotification } = require("../utils/notify");
+const { getIO } = require("../socket");
+
+async function loadTaskForBoard(taskId) {
+  return Task.findOne({
+    where: { id: taskId },
+    include: [
+      {
+        model: User,
+        as: "assignee",
+        attributes: ["id", "first_name", "last_name", "email", "avatar_url"],
+      },
+      {
+        model: User,
+        as: "creator",
+        attributes: ["id", "first_name", "last_name", "email"],
+      },
+      {
+        model: Tag,
+        as: "tags",
+        attributes: ["id", "name"],
+        through: { attributes: [] },
+      },
+    ],
+  });
+}
 
 // POST /api/projects
 exports.createProject = async (req, res) => {
@@ -348,13 +374,14 @@ exports.createTask = async (req, res) => {
   try {
     const { projectId } = req.params;
 
-    const {
+      const {
       title,
       description,
       status,
       priority,
       assigned_to,
       due_date,
+      tags,
     } = req.body;
 
     // 1. Validate title
@@ -395,6 +422,7 @@ exports.createTask = async (req, res) => {
     }
 
     // 4. Create task
+        // 4. Create task
     const task = await Task.create({
       organization_id: req.user.organization_id,
       project_id: projectId,
@@ -407,9 +435,54 @@ exports.createTask = async (req, res) => {
       due_date: due_date || null,
     });
 
+    // 5. Handle tags
+    if (Array.isArray(tags) && tags.length > 0) {
+      const tagRecords = await Promise.all(
+        tags.map((name) =>
+          Tag.findOrCreate({
+            where: {
+              name: name.trim().toLowerCase(),
+              organization_id: req.user.organization_id,
+            },
+            defaults: {
+              name: name.trim().toLowerCase(),
+              organization_id: req.user.organization_id,
+            },
+          }).then(([tag]) => tag),
+        ),
+      );
+      await task.setTags(tagRecords);
+    }
+
+    // 6. Reload task with tags
+    const full = await Task.findOne({
+      where: { id: task.id },
+      include: [{ model: Tag, as: "tags", attributes: ["id", "name"], through: { attributes: [] } }],
+    });
+
+    if (full.assigned_to) {
+      const actor = await User.findByPk(req.user.id, { attributes: ["first_name"] });
+      await createNotification({
+        organizationId: req.user.organization_id,
+        userId: full.assigned_to,
+        actorId: req.user.id,
+        type: "task_assigned",
+        taskId: full.id,
+        projectId: projectId,
+        message: `${actor?.first_name || "Someone"} assigned you to "${full.title}"`,
+      });
+    }
+
+    try {
+      const boardTask = await loadTaskForBoard(full.id);
+      getIO().to(`project:${projectId}`).emit("task:created", boardTask);
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
+
     return res.status(201).json({
       message: "Task created successfully.",
-      task,
+      task: full,
     });
   } catch (error) {
     console.error("Create task error:", error);
@@ -457,7 +530,7 @@ exports.getProjectTasks = async (req, res) => {
             "avatar_url",
           ],
         },
-        {
+               {
           model: require("../models").User,
           as: "creator",
           attributes: [
@@ -466,6 +539,12 @@ exports.getProjectTasks = async (req, res) => {
             "last_name",
             "email",
           ],
+        },
+        {
+          model: Tag,
+          as: "tags",
+          attributes: ["id", "name"],
+          through: { attributes: [] },
         },
       ],
       order: [["created_at", "DESC"]],
@@ -521,7 +600,7 @@ exports.getTaskById = async (req, res) => {
             "avatar_url",
           ],
         },
-        {
+       {
           model: require("../models").User,
           as: "creator",
           attributes: [
@@ -530,6 +609,12 @@ exports.getTaskById = async (req, res) => {
             "last_name",
             "email",
           ],
+        },
+        {
+          model: Tag,
+          as: "tags",
+          attributes: ["id", "name"],
+          through: { attributes: [] },
         },
       ],
     });
@@ -564,6 +649,7 @@ exports.updateTask = async (req, res) => {
       priority,
       assigned_to,
       due_date,
+      tags,
     } = req.body;
 
     // 1. Verify project belongs to current organization
@@ -649,12 +735,48 @@ exports.updateTask = async (req, res) => {
 
       task.status = status;
 
-      await task.save();
+          await task.save();
 
-      return res.json({
-        message: "Task status updated successfully.",
-        task,
-      });
+    // Handle tags update
+    if (Array.isArray(tags)) {
+      if (tags.length === 0) {
+        await task.setTags([]);
+      } else {
+        const tagRecords = await Promise.all(
+          tags.map((name) =>
+            Tag.findOrCreate({
+              where: {
+                name: name.trim().toLowerCase(),
+                organization_id: req.user.organization_id,
+              },
+              defaults: {
+                name: name.trim().toLowerCase(),
+                organization_id: req.user.organization_id,
+              },
+            }).then(([tag]) => tag),
+          ),
+        );
+        await task.setTags(tagRecords);
+      }
+    }
+
+    // Reload with tags
+    const full = await Task.findOne({
+      where: { id: task.id },
+      include: [{ model: Tag, as: "tags", attributes: ["id", "name"], through: { attributes: [] } }],
+    });
+
+    try {
+      const boardTask = await loadTaskForBoard(full.id);
+      getIO().to(`project:${projectId}`).emit("task:updated", boardTask);
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
+
+    return res.json({
+      message: "Task updated successfully.",
+      task: full,
+    });
     }
 
     // ============================================================
@@ -703,6 +825,8 @@ exports.updateTask = async (req, res) => {
       task.due_date = due_date;
     }
 
+    const previousAssignee = task.assigned_to;
+
     // 6. Validate new assignee
     if (assigned_to !== undefined) {
       if (assigned_to === null) {
@@ -726,6 +850,30 @@ exports.updateTask = async (req, res) => {
     }
 
     await task.save();
+
+    if (
+      assigned_to !== undefined &&
+      task.assigned_to &&
+      task.assigned_to !== previousAssignee
+    ) {
+      const actor = await User.findByPk(req.user.id, { attributes: ["first_name"] });
+      await createNotification({
+        organizationId: req.user.organization_id,
+        userId: task.assigned_to,
+        actorId: req.user.id,
+        type: "task_assigned",
+        taskId: task.id,
+        projectId: projectId,
+        message: `${actor?.first_name || "Someone"} assigned you to "${task.title}"`,
+      });
+    }
+
+    try {
+      const boardTask = await loadTaskForBoard(task.id);
+      getIO().to(`project:${projectId}`).emit("task:updated", boardTask);
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
 
     return res.json({
       message: "Task updated successfully.",
@@ -776,7 +924,14 @@ exports.deleteTask = async (req, res) => {
     }
 
     // 3. Delete task
+    const deletedTaskId = task.id;
     await task.destroy();
+
+    try {
+      getIO().to(`project:${projectId}`).emit("task:deleted", { taskId: deletedTaskId });
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
 
     return res.json({
       message: "Task deleted successfully.",

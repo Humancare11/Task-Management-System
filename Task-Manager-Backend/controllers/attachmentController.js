@@ -1,0 +1,134 @@
+const path = require("path");
+const fs = require("fs");
+const { Attachment, Task, Project, User } = require("../models");
+
+exports.uploadAttachment = async (req, res) => {
+  try {
+    const { projectId, taskId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded." });
+    }
+
+    const project = await Project.findOne({
+      where: { id: projectId, organization_id: req.user.organization_id },
+    });
+    if (!project) return res.status(404).json({ message: "Project not found." });
+
+    const task = await Task.findOne({
+      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
+    });
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    const attachment = await Attachment.create({
+      task_id: taskId,
+      organization_id: req.user.organization_id,
+      uploaded_by: req.user.id,
+      file_name: req.file.originalname,
+      file_path: req.file.filename, // just the filename, not full path
+      file_size: req.file.size,
+      mime_type: req.file.mimetype,
+    });
+
+    return res.status(201).json({
+      message: "File uploaded successfully.",
+      attachment: {
+        id: attachment.id,
+        file_name: attachment.file_name,
+        file_size: attachment.file_size,
+        mime_type: attachment.mime_type,
+        url: `/uploads/${attachment.file_path}`,
+        created_at: attachment.created_at,
+      },
+    });
+  } catch (error) {
+    console.error("Upload attachment error:", error);
+    return res.status(500).json({ message: "Server error while uploading file." });
+  }
+};
+
+exports.getAttachments = async (req, res) => {
+  try {
+    const { projectId, taskId } = req.params;
+
+    const project = await Project.findOne({
+      where: { id: projectId, organization_id: req.user.organization_id },
+    });
+    if (!project) return res.status(404).json({ message: "Project not found." });
+
+    const task = await Task.findOne({
+      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
+    });
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    const attachments = await Attachment.findAll({
+      where: { task_id: taskId, organization_id: req.user.organization_id },
+      include: [
+        {
+          model: User,
+          as: "uploader",
+          attributes: ["id", "first_name", "last_name", "email"],
+        },
+      ],
+      order: [["created_at", "ASC"]],
+    });
+
+    return res.json({
+      attachments: attachments.map((a) => ({
+        id: a.id,
+        file_name: a.file_name,
+        file_size: a.file_size,
+        mime_type: a.mime_type,
+        url: `/uploads/${a.file_path}`,
+        uploaded_by: a.uploader,
+        created_at: a.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error("Get attachments error:", error);
+    return res.status(500).json({ message: "Server error while fetching attachments." });
+  }
+};
+
+exports.deleteAttachment = async (req, res) => {
+  try {
+    const { projectId, taskId, attachmentId } = req.params;
+
+    const project = await Project.findOne({
+      where: { id: projectId, organization_id: req.user.organization_id },
+    });
+    if (!project) return res.status(404).json({ message: "Project not found." });
+
+    const task = await Task.findOne({
+      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
+    });
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    const attachment = await Attachment.findOne({
+      where: { id: attachmentId, task_id: taskId, organization_id: req.user.organization_id },
+    });
+    if (!attachment) return res.status(404).json({ message: "Attachment not found." });
+
+    // Only uploader or management can delete
+    const canDelete =
+      attachment.uploaded_by === req.user.id ||
+      ["owner", "admin", "manager"].includes(req.user.role);
+
+    if (!canDelete) {
+      return res.status(403).json({ message: "You cannot delete this attachment." });
+    }
+
+    // Delete file from disk
+    const filePath = path.join(__dirname, "../uploads", attachment.file_path);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    await attachment.destroy();
+
+    return res.json({ message: "Attachment deleted." });
+  } catch (error) {
+    console.error("Delete attachment error:", error);
+    return res.status(500).json({ message: "Server error while deleting attachment." });
+  }
+};

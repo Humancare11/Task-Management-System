@@ -6,6 +6,11 @@ const OrganizationInvitation = require("./OrganizationInvitation");
 const Project = require("./Project");
 const ProjectMember = require("./ProjectMember");
 const Task = require("./Task");
+const Subtask = require("./Subtask");
+const Comment = require("./Comment");
+const Tag = require("./Tag");
+const Attachment = require("./Attachment");
+const Notification = require("./Notification");
 
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
@@ -165,6 +170,189 @@ Task.belongsTo(User, {
   foreignKey: "created_by",
   as: "creator",
 });
+
+
+// Task ↔ Subtask
+Task.hasMany(Subtask, {
+  foreignKey: "task_id",
+  as: "subtasks",
+});
+
+Subtask.belongsTo(Task, {
+  foreignKey: "task_id",
+  as: "task",
+});
+
+// Organization ↔ Subtask
+Organization.hasMany(Subtask, {
+  foreignKey: "organization_id",
+  as: "subtasks",
+});
+
+Subtask.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// User ↔ Subtask (assigned user)
+User.hasMany(Subtask, {
+  foreignKey: "assigned_to",
+  as: "assignedSubtasks",
+});
+
+Subtask.belongsTo(User, {
+  foreignKey: "assigned_to",
+  as: "assignee",
+});
+
+// User ↔ Subtask (creator)
+User.hasMany(Subtask, {
+  foreignKey: "created_by",
+  as: "createdSubtasks",
+});
+
+Subtask.belongsTo(User, {
+  foreignKey: "created_by",
+  as: "creator",
+});
+
+// Task ↔ Comment
+Task.hasMany(Comment, {
+  foreignKey: "task_id",
+  as: "comments",
+});
+
+Comment.belongsTo(Task, {
+  foreignKey: "task_id",
+  as: "task",
+});
+
+// Organization ↔ Comment
+Organization.hasMany(Comment, {
+  foreignKey: "organization_id",
+  as: "comments",
+});
+
+Comment.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// User ↔ Comment (author)
+User.hasMany(Comment, {
+  foreignKey: "user_id",
+  as: "comments",
+});
+
+Comment.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "author",
+});
+
+// Task ↔ Tag (many-to-many through task_tags)
+Task.belongsToMany(Tag, {
+  through: "task_tags",
+  foreignKey: "task_id",
+  otherKey: "tag_id",
+  as: "tags",
+});
+
+Tag.belongsToMany(Task, {
+  through: "task_tags",
+  foreignKey: "tag_id",
+  otherKey: "task_id",
+  as: "tasks",
+});
+
+// Organization ↔ Tag
+Organization.hasMany(Tag, {
+  foreignKey: "organization_id",
+  as: "tags",
+});
+
+Tag.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// Task ↔ Attachment
+Task.hasMany(Attachment, {
+  foreignKey: "task_id",
+  as: "attachments",
+});
+
+Attachment.belongsTo(Task, {
+  foreignKey: "task_id",
+  as: "task",
+});
+
+// Organization ↔ Attachment
+Organization.hasMany(Attachment, {
+  foreignKey: "organization_id",
+  as: "attachments",
+});
+
+Attachment.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// User ↔ Attachment
+User.hasMany(Attachment, {
+  foreignKey: "uploaded_by",
+  as: "attachments",
+});
+
+Attachment.belongsTo(User, {
+  foreignKey: "uploaded_by",
+  as: "uploader",
+});
+
+// User ↔ Notification (recipient)
+User.hasMany(Notification, {
+  foreignKey: "user_id",
+  as: "notifications",
+});
+
+Notification.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "recipient",
+});
+
+// User ↔ Notification (actor)
+User.hasMany(Notification, {
+  foreignKey: "actor_id",
+  as: "triggeredNotifications",
+});
+
+Notification.belongsTo(User, {
+  foreignKey: "actor_id",
+  as: "actor",
+});
+
+// Task ↔ Notification
+Task.hasMany(Notification, {
+  foreignKey: "task_id",
+  as: "notifications",
+});
+
+Notification.belongsTo(Task, {
+  foreignKey: "task_id",
+  as: "task",
+});
+
+// Organization ↔ Notification
+Organization.hasMany(Notification, {
+  foreignKey: "organization_id",
+  as: "notifications",
+});
+
+Notification.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+
 module.exports = {
   User,
   Organization,
@@ -174,4 +362,9 @@ module.exports = {
   Project,
   ProjectMember,
   Task,
+  Subtask,
+  Comment,
+  Tag,
+  Attachment,
+  Notification,
 };
