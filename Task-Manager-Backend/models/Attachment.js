@@ -13,6 +13,10 @@ const Attachment = sequelize.define(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
     },
+    subtask_id: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+    },
     organization_id: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,

@@ -9,3 +9,5 @@ export const updateTask = (projectId, taskId, data) =>
   api.put(`/projects/${projectId}/tasks/${taskId}`, data);
 export const deleteTask = (projectId, taskId) =>
   api.delete(`/projects/${projectId}/tasks/${taskId}`);
+export const getMyTasks = () => api.get("/projects/my-tasks");
+export const getMySubtasks = () => api.get("/projects/my-subtasks");

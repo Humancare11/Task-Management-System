@@ -1,23 +1,41 @@
-const { Comment, Task, Project, User } = require("../models");
+const { Comment, Task, Subtask, Project, User } = require("../models");
 const { createNotification } = require("../utils/notify");
 const { getIO } = require("../socket");
 
+async function resolveContext(req) {
+  const { projectId, taskId, subtaskId } = req.params;
+
+  const project = await Project.findOne({
+    where: { id: projectId, organization_id: req.user.organization_id },
+  });
+  if (!project) return { error: { status: 404, message: "Project not found." } };
+
+  const task = await Task.findOne({
+    where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
+  });
+  if (!task) return { error: { status: 404, message: "Task not found." } };
+
+  let subtask = null;
+  if (subtaskId) {
+    subtask = await Subtask.findOne({
+      where: { id: subtaskId, task_id: taskId, organization_id: req.user.organization_id },
+    });
+    if (!subtask) return { error: { status: 404, message: "Subtask not found." } };
+  }
+
+  return { project, task, subtask };
+}
+
 exports.getComments = async (req, res) => {
   try {
-    const { projectId, taskId } = req.params;
-
-    const project = await Project.findOne({
-      where: { id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!project) return res.status(404).json({ message: "Project not found." });
-
-    const task = await Task.findOne({
-      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!task) return res.status(404).json({ message: "Task not found." });
+    const { taskId } = req.params;
+    const { error, subtask } = await resolveContext(req);
+    if (error) return res.status(error.status).json({ message: error.message });
 
     const comments = await Comment.findAll({
-      where: { task_id: taskId, organization_id: req.user.organization_id },
+      where: subtask
+        ? { subtask_id: subtask.id, organization_id: req.user.organization_id }
+        : { task_id: taskId, subtask_id: null, organization_id: req.user.organization_id },
       include: [
         {
           model: User,
@@ -44,18 +62,12 @@ exports.createComment = async (req, res) => {
       return res.status(400).json({ message: "Comment content is required." });
     }
 
-    const project = await Project.findOne({
-      where: { id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!project) return res.status(404).json({ message: "Project not found." });
-
-    const task = await Task.findOne({
-      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!task) return res.status(404).json({ message: "Task not found." });
+    const { error, task, subtask } = await resolveContext(req);
+    if (error) return res.status(error.status).json({ message: error.message });
 
     const comment = await Comment.create({
       task_id: taskId,
+      subtask_id: subtask ? subtask.id : null,
       organization_id: req.user.organization_id,
       user_id: req.user.id,
       content: content.trim(),
@@ -73,22 +85,27 @@ exports.createComment = async (req, res) => {
       ],
     });
 
-    if (task.assigned_to && task.assigned_to !== req.user.id) {
+    const notifyUserId = subtask
+      ? subtask.assigned_to || task.assigned_to
+      : task.assigned_to;
+
+    if (notifyUserId && notifyUserId !== req.user.id) {
       const actor = await User.findByPk(req.user.id, { attributes: ["first_name"] });
-      console.log("actor lookup:", req.user.id, actor);
+      const subject = subtask ? subtask.title : task.title;
       await createNotification({
         organizationId: req.user.organization_id,
-        userId: task.assigned_to,
+        userId: notifyUserId,
         actorId: req.user.id,
-        type: "comment_added",
+        type: subtask ? "subtask_comment_added" : "comment_added",
         taskId: task.id,
         projectId: projectId,
-        message: `${actor?.first_name || "Someone"} commented on "${task.title}"`,
+        message: `${actor?.first_name || "Someone"} commented on "${subject}"`,
       });
     }
 
     try {
-      getIO().to(`task:${taskId}`).emit("comment:created", full);
+      const eventName = subtask ? "subtask-comment:created" : "comment:created";
+      getIO().to(`task:${taskId}`).emit(eventName, full);
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }
@@ -102,20 +119,14 @@ exports.createComment = async (req, res) => {
 
 exports.deleteComment = async (req, res) => {
   try {
-    const { projectId, taskId, commentId } = req.params;
-
-    const project = await Project.findOne({
-      where: { id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!project) return res.status(404).json({ message: "Project not found." });
-
-    const task = await Task.findOne({
-      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!task) return res.status(404).json({ message: "Task not found." });
+    const { taskId, commentId } = req.params;
+    const { error, subtask } = await resolveContext(req);
+    if (error) return res.status(error.status).json({ message: error.message });
 
     const comment = await Comment.findOne({
-      where: { id: commentId, task_id: taskId, organization_id: req.user.organization_id },
+      where: subtask
+        ? { id: commentId, subtask_id: subtask.id, organization_id: req.user.organization_id }
+        : { id: commentId, task_id: taskId, subtask_id: null, organization_id: req.user.organization_id },
     });
     if (!comment) return res.status(404).json({ message: "Comment not found." });
 
@@ -132,7 +143,8 @@ exports.deleteComment = async (req, res) => {
     await comment.destroy();
 
     try {
-      getIO().to(`task:${taskId}`).emit("comment:deleted", { commentId: deletedCommentId });
+      const eventName = subtask ? "subtask-comment:deleted" : "comment:deleted";
+      getIO().to(`task:${taskId}`).emit(eventName, { commentId: deletedCommentId, subtaskId: subtask ? subtask.id : undefined });
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }

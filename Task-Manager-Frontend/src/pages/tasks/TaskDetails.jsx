@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Download,
   MoreVertical,
   Pencil,
@@ -22,7 +24,8 @@ import ConfirmDialog from "../../components/common/ConfirmDialog.jsx";
 import TaskStatusBadge from "../../components/tasks/TaskStatusBadge.jsx";
 import TaskPriorityBadge from "../../components/tasks/TaskPriorityBadge.jsx";
 import TaskFormModal from "../../components/tasks/TaskFormModal.jsx";
-
+import SubtaskFormModal from "../../components/subtasks/SubtaskFormModal.jsx";
+import SubtaskDetailPanel from "../../components/subtasks/SubtaskDetailPanel.jsx";
 import { getTask, updateTask, deleteTask } from "../../api/tasks.js";
 import {
   listAttachments,
@@ -45,7 +48,13 @@ import { listProjectMembers } from "../../api/projectMembers.js";
 import { getSocket } from "../../lib/socket.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { canEditTask, canDeleteTask } from "../../config/permissions.js";
+import {
+  canEditTask,
+  canDeleteTask,
+  canEditSubtaskFully,
+  canUpdateSubtaskStatus,
+  canDeleteComment,
+} from "../../config/permissions.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -92,11 +101,6 @@ const STATUS_CYCLE_LABEL = {
   completed: "Reset to to-do",
 };
 
-/** Whether the logged-in user can manage subtasks (create / delete / full edit) */
-function canManageSubtasks(user) {
-  return ["owner", "admin", "manager"].includes(user?.role);
-}
-
 // ─── component ──────────────────────────────────────────────────────────────
 
 export default function TaskDetails() {
@@ -116,6 +120,10 @@ export default function TaskDetails() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // ── subtask modal/dialog state ──
+  const [subtaskModalOpen, setSubtaskModalOpen] = useState(false);
+  const [editingSubtask, setEditingSubtask] = useState(null);
+
   // ── tabs ──
   const [activeTab, setActiveTab] = useState("subtasks");
 
@@ -124,6 +132,7 @@ export default function TaskDetails() {
   const [subtaskUpdating, setSubtaskUpdating] = useState({}); // { [id]: true }
   const [subtaskDeleting, setSubtaskDeleting] = useState({}); // { [id]: true }
   const [subtaskToDelete, setSubtaskToDelete] = useState(null); // subtask object
+  const [expandedSubtaskId, setExpandedSubtaskId] = useState(null);
 
   // ── add-subtask inline form ──
   const [addingSubtask, setAddingSubtask] = useState(false);
@@ -190,7 +199,9 @@ export default function TaskDetails() {
       );
     }
     function handleSubtaskUpdated(subtask) {
-      setSubtasks((prev) => prev.map((s) => (s.id === subtask.id ? subtask : s)));
+      setSubtasks((prev) =>
+        prev.map((s) => (s.id === subtask.id ? subtask : s)),
+      );
     }
     function handleSubtaskDeleted({ subtaskId }) {
       setSubtasks((prev) => prev.filter((s) => s.id !== subtaskId));
@@ -502,7 +513,7 @@ export default function TaskDetails() {
     user?.id === task?.assigned_to &&
     ["member", "manager"].includes(user?.role);
 
-  const canManage = canManageSubtasks(user);
+  const canManage = canEditSubtaskFully(user);
 
   // ─── render ───────────────────────────────────────────────────────────────
 
@@ -784,12 +795,28 @@ export default function TaskDetails() {
                       <>
                         {/* Header row */}
                         <div className="mb-4 flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-slate-900">
-                            Task Subtasks
-                          </h3>
-                          <span className="text-xs text-slate-500">
-                            {completedSubtasks} / {subtasks.length} completed
-                          </span>
+                          <div>
+                            <h3 className="text-sm font-semibold text-slate-900">
+                              Task Subtasks
+                            </h3>
+
+                            <span className="text-xs text-slate-500">
+                              {completedSubtasks} / {subtasks.length} completed
+                            </span>
+                          </div>
+
+                          {["owner", "admin", "manager", "member"].includes(
+                            user?.role,
+                          ) && (
+                            <Button
+                              onClick={() => {
+                                setEditingSubtask(null);
+                                setSubtaskModalOpen(true);
+                              }}
+                            >
+                              + Add Subtask
+                            </Button>
+                          )}
                         </div>
 
                         {/* Progress bar */}
@@ -819,10 +846,7 @@ export default function TaskDetails() {
                           const isDeleting = !!subtaskDeleting[subtask.id];
 
                           // Only assigned member or managers can toggle status
-                          const canToggle =
-                            canManage ||
-                            (user?.role === "member" &&
-                              subtask.assigned_to === user?.id);
+                          const canToggle = canUpdateSubtaskStatus(user, subtask);
 
                           // Warn owner if task is due within 2 days and subtask is incomplete
                           const isDueSoon =
@@ -833,9 +857,11 @@ export default function TaskDetails() {
                               return diff > 0 && diff < 2 * 24 * 60 * 60 * 1000;
                             })();
 
+                          const isExpanded = expandedSubtaskId === subtask.id;
+
                           return (
+                            <div key={subtask.id}>
                             <div
-                              key={subtask.id}
                               className={`group flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${
                                 isUpdating || isDeleting
                                   ? "border-slate-100 opacity-60"
@@ -907,6 +933,19 @@ export default function TaskDetails() {
                                       {subtask.description}
                                     </p>
                                   )}
+                                  {Array.isArray(subtask.tags) &&
+                                    subtask.tags.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {subtask.tags.map((tag) => (
+                                          <span
+                                            key={tag.id}
+                                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500"
+                                          >
+                                            {tag.name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                 </div>
                               </button>
 
@@ -959,7 +998,40 @@ export default function TaskDetails() {
                                     <Trash2 size={13} />
                                   </button>
                                 )}
+
+                                {/* Expand/collapse — comments & attachments */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedSubtaskId((prev) =>
+                                      prev === subtask.id ? null : subtask.id,
+                                    )
+                                  }
+                                  className="rounded p-1 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600"
+                                  title={
+                                    isExpanded
+                                      ? "Hide comments & attachments"
+                                      : "Show comments & attachments"
+                                  }
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown size={14} />
+                                  ) : (
+                                    <ChevronRight size={14} />
+                                  )}
+                                </button>
                               </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="mt-1.5">
+                                <SubtaskDetailPanel
+                                  projectId={projectId}
+                                  taskId={taskId}
+                                  subtask={subtask}
+                                />
+                              </div>
+                            )}
                             </div>
                           );
                         })}
@@ -1058,10 +1130,7 @@ export default function TaskDetails() {
                       )}
 
                       {comments.map((comment) => {
-                        const isOwn = comment.author?.id === user?.id;
-                        const canDelete =
-                          isOwn ||
-                          ["owner", "admin", "manager"].includes(user?.role);
+                        const canDelete = canDeleteComment(user, comment);
 
                         return (
                           <div key={comment.id} className="group flex gap-3">
@@ -1386,6 +1455,20 @@ export default function TaskDetails() {
         description={`Delete "${subtaskToDelete?.title}"? This cannot be undone.`}
         confirmLabel="Delete"
         loading={!!subtaskDeleting[subtaskToDelete?.id]}
+      />
+
+      <SubtaskFormModal
+        open={subtaskModalOpen}
+        onClose={() => {
+          setSubtaskModalOpen(false);
+          setEditingSubtask(null);
+        }}
+        projectId={projectId}
+        taskId={taskId}
+        mode={editingSubtask ? "edit" : "create"}
+        subtask={editingSubtask}
+        projectMembers={members}
+        onSaved={fetchAll}
       />
     </AppLayout>
   );

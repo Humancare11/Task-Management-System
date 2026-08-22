@@ -216,6 +216,43 @@ Subtask.belongsTo(User, {
   as: "creator",
 });
 
+// Subtask ↔ Comment
+Subtask.hasMany(Comment, {
+  foreignKey: "subtask_id",
+  as: "comments",
+});
+
+Comment.belongsTo(Subtask, {
+  foreignKey: "subtask_id",
+  as: "subtask",
+});
+
+// Subtask ↔ Tag (many-to-many through subtask_tags)
+Subtask.belongsToMany(Tag, {
+  through: "subtask_tags",
+  foreignKey: "subtask_id",
+  otherKey: "tag_id",
+  as: "tags",
+});
+
+Tag.belongsToMany(Subtask, {
+  through: "subtask_tags",
+  foreignKey: "tag_id",
+  otherKey: "subtask_id",
+  as: "subtasks",
+});
+
+// Subtask ↔ Attachment
+Subtask.hasMany(Attachment, {
+  foreignKey: "subtask_id",
+  as: "attachments",
+});
+
+Attachment.belongsTo(Subtask, {
+  foreignKey: "subtask_id",
+  as: "subtask",
+});
+
 // Task ↔ Comment
 Task.hasMany(Comment, {
   foreignKey: "task_id",

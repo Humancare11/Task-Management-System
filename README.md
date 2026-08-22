@@ -1,703 +1,414 @@
-Claude finished the response
+Thought for 1m 19s
 
-Perfect. Here are all the changes needed.
+Two files, same pattern as the board.
+Backend
 
-STEP 1 — Create src/api/attachments.js
+STEP 1 — subtaskController.js: add a reload helper + socket import
+
+Find:
 js
 
-import api from "./client.js";
+const {
+Subtask,
+Task,
+Project,
+ProjectMember,
+User,
+} = require("../models");
 
-export function listAttachments(projectId, taskId) {
-return api.get(`/projects/${projectId}/tasks/${taskId}/attachments`);
-}
+exports.createSubtask = async (req, res) => {
 
-export function uploadAttachment(projectId, taskId, file) {
-const formData = new FormData();
-formData.append("file", file);
-return api.post(
-`/projects/${projectId}/tasks/${taskId}/attachments`,
-formData,
-{ headers: { "Content-Type": "multipart/form-data" } },
-);
-}
-
-export function deleteAttachment(projectId, taskId, attachmentId) {
-return api.delete(
-`/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`,
-);
-}
-
-STEP 2 — TaskDetails.jsx changes
-
-Change 1 — Add import. Find:
+Replace:
 js
 
-import { getTask, updateTask, deleteTask } from "../../api/tasks.js";
+const {
+Subtask,
+Task,
+Project,
+ProjectMember,
+User,
+} = require("../models");
+const { getIO } = require("../socket");
 
-Replace with:
-js
-
-import { getTask, updateTask, deleteTask } from "../../api/tasks.js";
-import {
-listAttachments,
-uploadAttachment,
-deleteAttachment,
-} from "../../api/attachments.js";
-
-Change 2 — Add Upload to lucide imports. Find:
-js
-
-Download,
-MoreVertical,
-Pencil,
-Paperclip,
-Plus,
-Share2,
-Trash2,
-
-Replace with:
-js
-
-Download,
-MoreVertical,
-Pencil,
-Paperclip,
-Plus,
-Share2,
-Trash2,
-Upload,
-
-Change 3 — Add attachment state. Find:
-js
-
-// ── comment state ──
-
-Add this just above it:
-js
-
-// ── attachment state ──
-const [attachments, setAttachments] = useState([]);
-const [attachmentUploading, setAttachmentUploading] = useState(false);
-const [attachmentToDelete, setAttachmentToDelete] = useState(null);
-const [attachmentDeleting, setAttachmentDeleting] = useState(false);
-const [dragOver, setDragOver] = useState(false);
-const fileInputRef = useRef(null);
-
-Change 4 — Load attachments in fetchAll. Find:
-js
-
-    Promise.all([
-      getTask(projectId, taskId),
-      listProjectMembers(projectId),
-      listSubtasks(projectId, taskId),
-      listComments(projectId, taskId),
-    ])
-      .then(([taskRes, membersRes, subtasksRes, commentsRes]) => {
-        setTask(taskRes.data.task);
-        setMembers(membersRes.data.members);
-        setSubtasks(subtasksRes.data.subtasks);
-        setComments(commentsRes.data.comments);
-      })
-
-Replace with:
-js
-
-    Promise.all([
-      getTask(projectId, taskId),
-      listProjectMembers(projectId),
-      listSubtasks(projectId, taskId),
-      listComments(projectId, taskId),
-      listAttachments(projectId, taskId),
-    ])
-      .then(([taskRes, membersRes, subtasksRes, commentsRes, attachmentsRes]) => {
-        setTask(taskRes.data.task);
-        setMembers(membersRes.data.members);
-        setSubtasks(subtasksRes.data.subtasks);
-        setComments(commentsRes.data.comments);
-        setAttachments(attachmentsRes.data.attachments);
-      })
-
-Change 5 — Add attachment handlers. Find:
-js
-
-// ─── comment actions ──────────────────────────────────────────────────────
-
-Add this block just above it:
-js
-
-// ─── attachment actions ───────────────────────────────────────────────────
-
-function handleFileUpload(file) {
-if (!file) return;
-setAttachmentUploading(true);
-uploadAttachment(projectId, taskId, file)
-.then((res) => {
-setAttachments((prev) => [...prev, res.data.attachment]);
-toast.success("File uploaded.");
-})
-.catch((err) =>
-toast.error(err.response?.data?.message || "Failed to upload file."),
-)
-.finally(() => setAttachmentUploading(false));
-}
-
-function handleFileInputChange(e) {
-handleFileUpload(e.target.files[0]);
-e.target.value = "";
-}
-
-function handleDrop(e) {
-e.preventDefault();
-setDragOver(false);
-handleFileUpload(e.dataTransfer.files[0]);
-}
-
-function handleAttachmentDeleteConfirm() {
-if (!attachmentToDelete) return;
-setAttachmentDeleting(true);
-deleteAttachment(projectId, taskId, attachmentToDelete.id)
-.then(() => {
-setAttachments((prev) =>
-prev.filter((a) => a.id !== attachmentToDelete.id),
-);
-toast.success("Attachment deleted.");
-})
-.catch((err) =>
-toast.error(
-err.response?.data?.message || "Failed to delete attachment.",
-),
-)
-.finally(() => {
-setAttachmentDeleting(false);
-setAttachmentToDelete(null);
+async function loadSubtaskWithUsers(subtaskId) {
+return Subtask.findOne({
+where: { id: subtaskId },
+include: [
+{
+model: User,
+as: "assignee",
+attributes: ["id", "first_name", "last_name", "email", "avatar_url"],
+},
+{
+model: User,
+as: "creator",
+attributes: ["id", "first_name", "last_name", "email"],
+},
+],
 });
 }
 
-function formatFileSize(bytes) {
-if (bytes < 1024) return `${bytes} B`;
-if (bytes < 1024 _ 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-return `${(bytes / (1024 _ 1024)).toFixed(1)} MB`;
-}
+exports.createSubtask = async (req, res) => {
 
-Change 6 — Remove old derived attachments. Find and delete this line:
+This helper is worth the extra reload — your createSubtask currently returns the bare row with no assignee/creator, but getSubtasks (and the UI's avatar rendering) expects those included. Without it, a subtask that arrives live would render without its assignee avatar until the page refreshed.
+
+STEP 2 — createSubtask: reload + emit
+
+Find:
 js
 
-const attachments = Array.isArray(task?.attachments) ? task.attachments : [];
+    // 5. Create subtask
+    const subtask = await Subtask.create({
+      task_id: task.id,
+      organization_id: req.user.organization_id,
+      title: title.trim(),
+      description: description || null,
+      assigned_to: assigned_to || null,
+      created_by: req.user.id,
+      status: "todo",
+    });
 
-Change 7 — Replace the entire Attachments section. Find:
-jsx
+    return res.status(201).json({
+      message: "Subtask created successfully.",
+      subtask,
+    });
 
-                {/* Attachments */}
-                {attachments.length > 0 && (
-                  <div className="px-5 py-5">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold text-slate-900">
-                        Attachment ({attachments.length})
-                      </h2>
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700"
-                      >
-                        <Download size={13} />
-                        Download All
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      {attachments.map((file, index) => (
-                        <div
-                          key={file.id || index}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3 transition hover:border-slate-300 hover:bg-slate-50"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-                              <Paperclip size={17} className="text-slate-500" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-slate-800">
-                                {file.name || file.file_name || "Attachment"}
-                              </p>
-                              {file.size && (
-                                <p className="text-xs text-slate-400">
-                                  {file.size}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          {file.url && (
-
-                              href={file.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                            >
-                              <Download size={15} />
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {attachments.length === 0 && (
-                  <div className="px-5 py-4">
-                    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-center">
-                      <Paperclip
-                        size={18}
-                        className="mx-auto mb-1 text-slate-300"
-                      />
-                      <p className="text-xs text-slate-400">No attachments</p>
-                    </div>
-                  </div>
-                )}
-
-Replace with:
-jsx
-
-                {/* Attachments */}
-                <div className="px-5 py-5">
-                  {/* Header */}
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-slate-900">
-                      Attachments
-                      {attachments.length > 0 && (
-                        <span className="ml-1.5 text-slate-400">
-                          ({attachments.length})
-                        </span>
-                      )}
-                    </h2>
-                    {canManage && (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={attachmentUploading}
-                        className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-40"
-                      >
-                        <Upload size={13} />
-                        {attachmentUploading ? "Uploading…" : "Upload"}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Hidden file input */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileInputChange}
-                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                  />
-
-                  {/* File list */}
-                  {attachments.length > 0 && (
-                    <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                      {attachments.map((file) => (
-                        <div
-                          key={file.id}
-                          className="group flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3 transition hover:border-slate-300 hover:bg-slate-50"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-                              <Paperclip size={17} className="text-slate-500" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-slate-800">
-                                {file.file_name}
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                {formatFileSize(file.file_size)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1">
-
-                              href={`http://localhost:5000${file.url}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                              title="Download"
-                            >
-                              <Download size={15} />
-                            </a>
-                            {canManage && (
-                              <button
-                                type="button"
-                                onClick={() => setAttachmentToDelete(file)}
-                                className="hidden rounded-md p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500 group-hover:block"
-                                title="Delete"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Drag & drop zone */}
-                  {canManage && (
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                      onDragLeave={() => setDragOver(false)}
-                      onDrop={handleDrop}
-                      onClick={() => fileInputRef.current?.click()}
-                      className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${
-                        dragOver
-                          ? "border-sky-400 bg-sky-50"
-                          : "border-slate-200 hover:border-slate-300"
-                      }`}
-                    >
-                      <Upload
-                        size={18}
-                        className={`mx-auto mb-1 ${dragOver ? "text-sky-400" : "text-slate-300"}`}
-                      />
-                      <p className="text-xs text-slate-400">
-                        {attachmentUploading
-                          ? "Uploading…"
-                          : "Drop a file here or click to upload"}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-300">
-                        PNG, JPG, PDF, DOC, XLS up to 10MB
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Empty state for non-managers */}
-                  {!canManage && attachments.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-center">
-                      <Paperclip size={18} className="mx-auto mb-1 text-slate-300" />
-                      <p className="text-xs text-slate-400">No attachments</p>
-                    </div>
-                  )}
-                </div>
-
-Change 8 — Add delete attachment dialog. Find:
-jsx
-
-      {/* Delete Comment Dialog */}
-
-Add this just above it:
-jsx
-
-      {/* Delete Attachment Dialog */}
-      <ConfirmDialog
-        open={!!attachmentToDelete}
-        onClose={() => setAttachmentToDelete(null)}
-        onConfirm={handleAttachmentDeleteConfirm}
-        title="Delete Attachment"
-        description={`Delete "${attachmentToDelete?.file_name}"? This cannot be undone.`}
-        confirmLabel="Delete"
-        loading={attachmentDeleting}
-      />
-
-Save, reload. You should see the drag & drop zone in the attachments section. Try dropping a file and tell me what you see.
-
-where I can see
-
-The attachments section is in the Task Main Card — the white card at the top left of the Task Details page, between the header and the description.
-
-Open any task and look here:
-
-┌─────────────────────────────────┐
-│ To Do ✏ ⋯ │
-│ Task Title │
-│ Project · Created Aug 20 │
-├─────────────────────────────────┤
-│ Attachments (0) ↑ Upload │ ← HERE
-│ ┌─────────────────────────┐ │
-│ │ Drop a file or click │ │
-│ └─────────────────────────┘ │
-├─────────────────────────────────┤
-│ Description │
-│ ... │
-└─────────────────────────────────┘
-
-If you're logged in as member you won't see the upload zone — it only shows for owner/admin/manager because of the canManage check.
-
-Log in as owner and open a task. Do you see the drag & drop zone?
-
-yes its fine but I want also this while creating the task
-
-Got it. You want the attachment upload inside TaskFormModal as well — so the owner can attach files while creating the task.
-
-The flow will be:
-
-    Create the task first
-    Then upload the selected files to the new task's ID
-
-Paste your current TaskFormModal.jsx and I'll give you the exact changes.
-
-Here are the exact changes to TaskFormModal.jsx:
-
-Change 1 — Add import. Find:
+Replace:
 js
 
-import { createTask, updateTask } from "../../api/tasks.js";
+    // 5. Create subtask
+    const subtask = await Subtask.create({
+      task_id: task.id,
+      organization_id: req.user.organization_id,
+      title: title.trim(),
+      description: description || null,
+      assigned_to: assigned_to || null,
+      created_by: req.user.id,
+      status: "todo",
+    });
 
-Replace with:
-js
+    const full = await loadSubtaskWithUsers(subtask.id);
 
-import { useRef } from "react";
-import { createTask, updateTask } from "../../api/tasks.js";
-import { uploadAttachment } from "../../api/attachments.js";
-
-Change 2 — Add attachment state. Find:
-js
-
-const [submitting, setSubmitting] = useState(false);
-
-Replace with:
-js
-
-const [submitting, setSubmitting] = useState(false);
-const [pendingFiles, setPendingFiles] = useState([]);
-const [dragOver, setDragOver] = useState(false);
-const fileInputRef = useRef(null);
-
-Change 3 — Reset pending files when modal opens. Find:
-js
-
-    setError("");
-
-}, [open, mode, task]);
-
-Replace with:
-js
-
-    setError("");
-    setPendingFiles([]);
-
-}, [open, mode, task]);
-
-Change 4 — Add file helpers. Find:
-js
-
-function handleChange(field) {
-
-Add this block just above it:
-js
-
-function handleFilePick(e) {
-const files = Array.from(e.target.files);
-setPendingFiles((prev) => [...prev, ...files]);
-e.target.value = "";
-}
-
-function handleFileDrop(e) {
-e.preventDefault();
-setDragOver(false);
-const files = Array.from(e.dataTransfer.files);
-setPendingFiles((prev) => [...prev, ...files]);
-}
-
-function removePendingFile(index) {
-setPendingFiles((prev) => prev.filter((\_, i) => i !== index));
-}
-
-function formatFileSize(bytes) {
-if (bytes < 1024) return `${bytes} B`;
-if (bytes < 1024 _ 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-return `${(bytes / (1024 _ 1024)).toFixed(1)} MB`;
-}
-
-Change 5 — Update handleSubmit to upload files after task creation. Find:
-js
-
-    setSubmitting(true);
-    const request =
-      mode === "edit"
-        ? updateTask(projectId, task.id, payload)
-        : createTask(projectId, payload);
-
-    request
-      .then(() => {
-        toast.success(mode === "edit" ? "Task updated." : "Task created.");
-        onSaved();
-        onClose();
-      })
-      .catch((err) => {
-        toast.error(err.response?.data?.message || "Failed to save task.");
-      })
-      .finally(() => setSubmitting(false));
-
-Replace with:
-js
-
-    setSubmitting(true);
-
-    if (mode === "edit") {
-      updateTask(projectId, task.id, payload)
-        .then(() => {
-          toast.success("Task updated.");
-          onSaved();
-          onClose();
-        })
-        .catch((err) =>
-          toast.error(err.response?.data?.message || "Failed to save task."),
-        )
-        .finally(() => setSubmitting(false));
-      return;
+    try {
+      getIO().to(`task:${taskId}`).emit("subtask:created", full);
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
     }
 
-    // Create mode — create task first, then upload files
-    createTask(projectId, payload)
-      .then(async (res) => {
-        const newTaskId = res.data.task.id;
+    return res.status(201).json({
+      message: "Subtask created successfully.",
+      subtask: full,
+    });
 
-        // Upload all pending files sequentially
-        if (pendingFiles.length > 0) {
-          for (const file of pendingFiles) {
-            try {
-              await uploadAttachment(projectId, newTaskId, file);
-            } catch {
-              toast.error(`Failed to upload ${file.name}`);
-            }
-          }
-        }
+STEP 3 — updateSubtask, member-only status branch
 
-        toast.success("Task created.");
-        onSaved();
-        onClose();
+Find:
+js
+
+      subtask.status = status;
+
+      await subtask.save();
+
+      return res.json({
+        message: "Subtask status updated successfully.",
+        subtask,
+      });
+    }
+
+Replace:
+js
+
+      subtask.status = status;
+
+      await subtask.save();
+
+      const full = await loadSubtaskWithUsers(subtask.id);
+
+      try {
+        getIO().to(`task:${taskId}`).emit("subtask:updated", full);
+      } catch (err) {
+        console.error("Socket emit failed:", err.message);
+      }
+
+      return res.json({
+        message: "Subtask status updated successfully.",
+        subtask: full,
+      });
+    }
+
+STEP 4 — updateSubtask, owner/admin/manager branch
+
+Find:
+js
+
+    await subtask.save();
+
+    return res.json({
+      message: "Subtask updated successfully.",
+      subtask,
+    });
+
+} catch (error) {
+console.error("Update subtask error:", error);
+
+Replace:
+js
+
+    await subtask.save();
+
+    const full = await loadSubtaskWithUsers(subtask.id);
+
+    try {
+      getIO().to(`task:${taskId}`).emit("subtask:updated", full);
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
+
+    return res.json({
+      message: "Subtask updated successfully.",
+      subtask: full,
+    });
+
+} catch (error) {
+console.error("Update subtask error:", error);
+
+STEP 5 — deleteSubtask
+
+Find:
+js
+
+    // 5. Delete subtask
+    await subtask.destroy();
+
+    return res.json({
+      message: "Subtask deleted successfully.",
+    });
+
+Replace:
+js
+
+    // 5. Delete subtask
+    const deletedSubtaskId = subtask.id;
+    await subtask.destroy();
+
+    try {
+      getIO().to(`task:${taskId}`).emit("subtask:deleted", { subtaskId: deletedSubtaskId });
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
+
+    return res.json({
+      message: "Subtask deleted successfully.",
+    });
+
+STEP 6 — commentController.js: add socket import
+
+Find:
+js
+
+const { Comment, Task, Project, User } = require("../models");
+const { createNotification } = require("../utils/notify");
+
+Replace:
+js
+
+const { Comment, Task, Project, User } = require("../models");
+const { createNotification } = require("../utils/notify");
+const { getIO } = require("../socket");
+
+STEP 7 — createComment: emit after the notification
+
+Find:
+js
+
+      message: `${actor?.first_name || "Someone"} commented on "${task.title}"`,
+      });
+    }
+
+    return res.status(201).json({ message: "Comment created.", comment: full });
+
+Replace:
+js
+
+      message: `${actor?.first_name || "Someone"} commented on "${task.title}"`,
+      });
+    }
+
+    try {
+      getIO().to(`task:${taskId}`).emit("comment:created", full);
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
+
+    return res.status(201).json({ message: "Comment created.", comment: full });
+
+STEP 8 — deleteComment
+
+Find:
+js
+
+    await comment.destroy();
+    return res.json({ message: "Comment deleted." });
+
+Replace:
+js
+
+    const deletedCommentId = comment.id;
+    await comment.destroy();
+
+    try {
+      getIO().to(`task:${taskId}`).emit("comment:deleted", { commentId: deletedCommentId });
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
+
+    return res.json({ message: "Comment deleted." });
+
+Frontend — TaskDetails.jsx
+
+STEP 9 — import the socket
+
+Find:
+js
+
+import { listProjectMembers } from "../../api/projectMembers.js";
+import { useAuth } from "../../context/AuthContext.jsx";
+
+Replace:
+js
+
+import { listProjectMembers } from "../../api/projectMembers.js";
+import { getSocket } from "../../lib/socket.js";
+import { useAuth } from "../../context/AuthContext.jsx";
+
+STEP 10 — join the task room, listen for live events
+
+Find:
+js
+
+useEffect(() => {
+fetchAll();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [projectId, taskId]);
+
+// Focus add-input when form opens
+
+Replace:
+js
+
+useEffect(() => {
+fetchAll();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [projectId, taskId]);
+
+useEffect(() => {
+const socket = getSocket();
+socket.emit("task:join", taskId);
+
+    function handleSubtaskCreated(subtask) {
+      setSubtasks((prev) =>
+        prev.some((s) => s.id === subtask.id) ? prev : [...prev, subtask],
+      );
+    }
+    function handleSubtaskUpdated(subtask) {
+      setSubtasks((prev) => prev.map((s) => (s.id === subtask.id ? subtask : s)));
+    }
+    function handleSubtaskDeleted({ subtaskId }) {
+      setSubtasks((prev) => prev.filter((s) => s.id !== subtaskId));
+    }
+
+    function handleCommentCreated(comment) {
+      setComments((prev) =>
+        prev.some((c) => c.id === comment.id) ? prev : [...prev, comment],
+      );
+    }
+    function handleCommentDeleted({ commentId }) {
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    }
+
+    socket.on("subtask:created", handleSubtaskCreated);
+    socket.on("subtask:updated", handleSubtaskUpdated);
+    socket.on("subtask:deleted", handleSubtaskDeleted);
+    socket.on("comment:created", handleCommentCreated);
+    socket.on("comment:deleted", handleCommentDeleted);
+
+    return () => {
+      socket.emit("task:leave", taskId);
+      socket.off("subtask:created", handleSubtaskCreated);
+      socket.off("subtask:updated", handleSubtaskUpdated);
+      socket.off("subtask:deleted", handleSubtaskDeleted);
+      socket.off("comment:created", handleCommentCreated);
+      socket.off("comment:deleted", handleCommentDeleted);
+    };
+
+}, [taskId]);
+
+// Focus add-input when form opens
+
+The prev.some(...) ? prev : [...] guard on the created handlers matters: the person performing the action already appends it locally from the API response, and their own browser tab is also in the task:<id> room — without the dedupe check they'd see their own subtask/comment appear twice.
+
+Restart the backend, open the same task in both windows, and try adding/completing a subtask and posting a comment from each side.
+
+You can see into the image during sent comment and subtask, then able to sent 2 time
+Thought for 48s
+
+Good catch — that's a race condition, not literally clicking twice. Here's what's happening:
+
+When you add a subtask, two things happen almost simultaneously:
+
+    The HTTP POST request resolves and your .then() appends the subtask to state
+    The server also emits subtask:created to the task:<id> room — which includes your own browser, since you joined that room too
+
+The socket event and the HTTP response race each other. If the socket message arrives first (very likely on localhost — WebSocket delivery beats an HTTP round trip), it appends the subtask. Then the HTTP .then() fires right after and appends it again, with no check for whether it's already there. That's why only the creator's own window shows the duplicate (2 subtasks) while the other window — which only ever gets the single socket event — correctly shows 1.
+
+The socket handler already guards against this (prev.some(...)); the HTTP .then() handlers don't. Fix is to add the same guard there.
+
+TaskDetails.jsx — handleAddSubtask. Find:
+js
+
+    createSubtask(projectId, taskId, {
+      title,
+      assigned_to: newSubtaskAssignee ? Number(newSubtaskAssignee) : null,
+    })
+      .then((res) => {
+        setSubtasks((prev) => [...prev, res.data.subtask]);
+        setNewSubtaskTitle("");
+
+Replace:
+js
+
+    createSubtask(projectId, taskId, {
+      title,
+      assigned_to: newSubtaskAssignee ? Number(newSubtaskAssignee) : null,
+    })
+      .then((res) => {
+        setSubtasks((prev) =>
+          prev.some((s) => s.id === res.data.subtask.id)
+            ? prev
+            : [...prev, res.data.subtask],
+        );
+        setNewSubtaskTitle("");
+
+handleSendComment. Find:
+js
+
+    createComment(projectId, taskId, content)
+      .then((res) => {
+        setComments((prev) => [...prev, res.data.comment]);
+        setCommentText("");
       })
-      .catch((err) =>
-        toast.error(err.response?.data?.message || "Failed to create task."),
-      )
-      .finally(() => setSubmitting(false));
 
-Change 6 — Add Attachment UI. Find:
-jsx
+Replace:
+js
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-ink">
-                  Assignee
-                </label>
+    createComment(projectId, taskId, content)
+      .then((res) => {
+        setComments((prev) =>
+          prev.some((c) => c.id === res.data.comment.id)
+            ? prev
+            : [...prev, res.data.comment],
+        );
+        setCommentText("");
+      })
 
-Add this block just above it:
-jsx
-
-            {/* Attachments */}
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink">
-                Attachments
-              </label>
-
-              {/* Pending file list */}
-              {pendingFiles.length > 0 && (
-                <div className="mb-2 space-y-1.5">
-                  {pendingFiles.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4 text-slate-500"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                            />
-                          </svg>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-slate-700">
-                            {file.name}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {formatFileSize(file.size)}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removePendingFile(index)}
-                        className="ml-2 shrink-0 text-slate-300 hover:text-red-500"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Drag & drop zone */}
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleFileDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${
-                  dragOver
-                    ? "border-sky-400 bg-sky-50"
-                    : "border-slate-200 hover:border-slate-300"
-                }`}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className={`mx-auto mb-1 h-5 w-5 ${dragOver ? "text-sky-400" : "text-slate-300"}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                  />
-                </svg>
-                <p className="text-xs text-slate-400">
-                  Drop files here or click to upload
-                </p>
-                <p className="mt-0.5 text-xs text-slate-300">
-                  PNG, JPG, PDF, DOC, XLS up to 10MB
-                </p>
-              </div>
-
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={handleFilePick}
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-              />
-            </div>
-
-Save and test — open the Add Task form, drop a file in the zone, fill the title, click Create Task. The task should be created and the file uploaded in one flow.
-
-Tell me what you see.
-
-yes done
-
-Great, the full task creation flow with attachments is working.
-
-Let me summarize everything we've built today so you know where you stand:
-
-Completed today:
-
-    ✅ Subtask flow — create, status toggle, delete, assignee, permissions
-    ✅ Comment module — create, delete, avatar + time ago UI
-    ✅ Tags — free text chips, stored in DB, shown on task details
-    ✅ Attachments — upload, delete, drag & drop on task details + task creation form
-
-What's remaining based on your original plan:
-
-    Activity tab — log when task is created, status changed, subtask added, comment posted
-    Notifications — bell icon you have in the header
-    Dashboard — the main overview page
-
-Which one do you want to tackle next?
-
-Claude is AI and can make mistakes. Please double-check responses.
+Now whichever arrives first — the socket echo or the HTTP response — wins, and the second one is a no-op instead of a duplicate append. Delete the stray duplicate rows from your test data, restart the frontend, and try adding a subtask again — should show exactly 1 on both sides.

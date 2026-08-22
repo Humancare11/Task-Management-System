@@ -1,27 +1,44 @@
 const path = require("path");
 const fs = require("fs");
-const { Attachment, Task, Project, User } = require("../models");
+const { Attachment, Task, Subtask, Project, User } = require("../models");
+
+async function resolveContext(req) {
+  const { projectId, taskId, subtaskId } = req.params;
+
+  const project = await Project.findOne({
+    where: { id: projectId, organization_id: req.user.organization_id },
+  });
+  if (!project) return { error: { status: 404, message: "Project not found." } };
+
+  const task = await Task.findOne({
+    where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
+  });
+  if (!task) return { error: { status: 404, message: "Task not found." } };
+
+  let subtask = null;
+  if (subtaskId) {
+    subtask = await Subtask.findOne({
+      where: { id: subtaskId, task_id: taskId, organization_id: req.user.organization_id },
+    });
+    if (!subtask) return { error: { status: 404, message: "Subtask not found." } };
+  }
+
+  return { project, task, subtask };
+}
 
 exports.uploadAttachment = async (req, res) => {
   try {
-    const { projectId, taskId } = req.params;
-
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded." });
     }
 
-    const project = await Project.findOne({
-      where: { id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!project) return res.status(404).json({ message: "Project not found." });
-
-    const task = await Task.findOne({
-      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!task) return res.status(404).json({ message: "Task not found." });
+    const { taskId } = req.params;
+    const { error, subtask } = await resolveContext(req);
+    if (error) return res.status(error.status).json({ message: error.message });
 
     const attachment = await Attachment.create({
       task_id: taskId,
+      subtask_id: subtask ? subtask.id : null,
       organization_id: req.user.organization_id,
       uploaded_by: req.user.id,
       file_name: req.file.originalname,
@@ -49,20 +66,14 @@ exports.uploadAttachment = async (req, res) => {
 
 exports.getAttachments = async (req, res) => {
   try {
-    const { projectId, taskId } = req.params;
-
-    const project = await Project.findOne({
-      where: { id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!project) return res.status(404).json({ message: "Project not found." });
-
-    const task = await Task.findOne({
-      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!task) return res.status(404).json({ message: "Task not found." });
+    const { taskId } = req.params;
+    const { error, subtask } = await resolveContext(req);
+    if (error) return res.status(error.status).json({ message: error.message });
 
     const attachments = await Attachment.findAll({
-      where: { task_id: taskId, organization_id: req.user.organization_id },
+      where: subtask
+        ? { subtask_id: subtask.id, organization_id: req.user.organization_id }
+        : { task_id: taskId, subtask_id: null, organization_id: req.user.organization_id },
       include: [
         {
           model: User,
@@ -92,20 +103,14 @@ exports.getAttachments = async (req, res) => {
 
 exports.deleteAttachment = async (req, res) => {
   try {
-    const { projectId, taskId, attachmentId } = req.params;
-
-    const project = await Project.findOne({
-      where: { id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!project) return res.status(404).json({ message: "Project not found." });
-
-    const task = await Task.findOne({
-      where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
-    });
-    if (!task) return res.status(404).json({ message: "Task not found." });
+    const { taskId, attachmentId } = req.params;
+    const { error, subtask } = await resolveContext(req);
+    if (error) return res.status(error.status).json({ message: error.message });
 
     const attachment = await Attachment.findOne({
-      where: { id: attachmentId, task_id: taskId, organization_id: req.user.organization_id },
+      where: subtask
+        ? { id: attachmentId, subtask_id: subtask.id, organization_id: req.user.organization_id }
+        : { id: attachmentId, task_id: taskId, subtask_id: null, organization_id: req.user.organization_id },
     });
     if (!attachment) return res.status(404).json({ message: "Attachment not found." });
 

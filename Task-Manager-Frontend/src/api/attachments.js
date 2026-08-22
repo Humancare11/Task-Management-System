@@ -1,21 +1,27 @@
 import api from "./client.js";
 
-export function listAttachments(projectId, taskId) {
-  return api.get(`/projects/${projectId}/tasks/${taskId}/attachments`);
+function attachmentsBase(projectId, taskId, subtaskId) {
+  return subtaskId
+    ? `/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/attachments`
+    : `/projects/${projectId}/tasks/${taskId}/attachments`;
 }
 
-export function uploadAttachment(projectId, taskId, file) {
+export function listAttachments(projectId, taskId, subtaskId) {
+  return api.get(attachmentsBase(projectId, taskId, subtaskId));
+}
+
+export function uploadAttachment(projectId, taskId, file, subtaskId) {
   const formData = new FormData();
   formData.append("file", file);
   return api.post(
-    `/projects/${projectId}/tasks/${taskId}/attachments`,
+    attachmentsBase(projectId, taskId, subtaskId),
     formData,
     { headers: { "Content-Type": "multipart/form-data" } },
   );
 }
 
-export function deleteAttachment(projectId, taskId, attachmentId) {
+export function deleteAttachment(projectId, taskId, attachmentId, subtaskId) {
   return api.delete(
-    `/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`,
+    `${attachmentsBase(projectId, taskId, subtaskId)}/${attachmentId}`,
   );
 }
