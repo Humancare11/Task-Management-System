@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
 import FormField from "../components/FormField.jsx";
-import api from "../api/client.js";
+import api, { API_BASE_URL } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Login() {
@@ -38,7 +38,7 @@ export default function Login() {
   }
 
   function handleGoogleLogin() {
-    window.location.href = "http://localhost:5000/api/auth/google";
+    window.location.href = `${API_BASE_URL}/auth/google`;
   }
 
   return (

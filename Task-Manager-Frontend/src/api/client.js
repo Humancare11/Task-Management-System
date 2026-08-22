@@ -1,15 +1,23 @@
 import axios from "axios";
 
+export const API_BASE_URL =
+  "https://darkviolet-cobra-939760.hostingersite.com/api";
+
+export const API_ORIGIN =
+  "https://darkviolet-cobra-939760.hostingersite.com";
+
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: API_BASE_URL,
 });
 
-// Attach the JWT to every request automatically, if we have one
+// Attach the JWT to every request automatically
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 
