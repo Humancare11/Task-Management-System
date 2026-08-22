@@ -130,10 +130,13 @@ exports.login = async (req, res) => {
         organization_id: membership.organization_id,
       },
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error during login." });
-  }
+} catch (error) {
+  console.error("LOGIN ERROR:", error);
+  console.error("SQL MESSAGE:", error.original?.sqlMessage);
+  console.error("SQL:", error.sql);
+
+  res.status(500).json({ message: "Server error during login." });
+}
 };
 
 // GET /api/auth/google/callback
