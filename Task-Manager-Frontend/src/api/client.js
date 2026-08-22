@@ -3,6 +3,9 @@ import axios from "axios";
 export const API_BASE_URL =
   "https://darkviolet-cobra-939760.hostingersite.com/api";
 
+export const API_ORIGIN =
+  "https://darkviolet-cobra-939760.hostingersite.com";
+
 const api = axios.create({
   baseURL: API_BASE_URL,
 });
