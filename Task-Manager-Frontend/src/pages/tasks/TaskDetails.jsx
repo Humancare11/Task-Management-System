@@ -46,6 +46,7 @@ import { getSocket } from "../../lib/socket.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { canEditTask, canDeleteTask } from "../../config/permissions.js";
+import { API_ORIGIN } from "../../api/client.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -665,7 +666,7 @@ export default function TaskDetails() {
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
                             <a
-                              href={`http://localhost:5000${file.url}`}
+                              href={`${API_ORIGIN}${file.url}`}
                               target="_blank"
                               rel="noreferrer"
                               className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
@@ -699,11 +700,10 @@ export default function TaskDetails() {
                       onDragLeave={() => setDragOver(false)}
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current?.click()}
-                      className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${
-                        dragOver
+                      className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${dragOver
                           ? "border-sky-400 bg-sky-50"
                           : "border-slate-200 hover:border-slate-300"
-                      }`}
+                        }`}
                     >
                       <Upload
                         size={18}
@@ -757,11 +757,10 @@ export default function TaskDetails() {
                         key={key}
                         type="button"
                         onClick={() => setActiveTab(key)}
-                        className={`relative pb-3 text-sm font-medium transition ${
-                          activeTab === key
+                        className={`relative pb-3 text-sm font-medium transition ${activeTab === key
                             ? "text-sky-600"
                             : "text-slate-500 hover:text-slate-800"
-                        }`}
+                          }`}
                       >
                         {label}
                         {key === "subtasks" && subtasks.length > 0 && (
@@ -836,13 +835,12 @@ export default function TaskDetails() {
                           return (
                             <div
                               key={subtask.id}
-                              className={`group flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${
-                                isUpdating || isDeleting
+                              className={`group flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${isUpdating || isDeleting
                                   ? "border-slate-100 opacity-60"
                                   : isDueSoon
                                     ? "border-amber-200 bg-amber-50"
                                     : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
-                              }`}
+                                }`}
                             >
                               {/* Left: checkbox + text */}
                               <button
@@ -858,19 +856,17 @@ export default function TaskDetails() {
                                     ? STATUS_CYCLE_LABEL[subtask.status]
                                     : "Not assigned to you"
                                 }
-                                className={`flex min-w-0 flex-1 items-center gap-3 text-left ${
-                                  !canToggle ? "cursor-default" : ""
-                                }`}
+                                className={`flex min-w-0 flex-1 items-center gap-3 text-left ${!canToggle ? "cursor-default" : ""
+                                  }`}
                               >
                                 {/* Checkbox */}
                                 <div
-                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
-                                    completed
+                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${completed
                                       ? "border-sky-500 bg-sky-500"
                                       : subtask.status === "in_progress"
                                         ? "border-blue-400 bg-blue-50"
                                         : "border-slate-300 bg-white"
-                                  }`}
+                                    }`}
                                 >
                                   {completed && (
                                     <CheckCircle2
@@ -887,11 +883,10 @@ export default function TaskDetails() {
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     <p
-                                      className={`text-sm ${
-                                        completed
+                                      className={`text-sm ${completed
                                           ? "text-slate-400 line-through"
                                           : "text-slate-700"
-                                      }`}
+                                        }`}
                                     >
                                       {subtask.title}
                                     </p>
@@ -932,13 +927,12 @@ export default function TaskDetails() {
                                 )}
 
                                 <span
-                                  className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                    completed
+                                  className={`rounded-full px-2 py-1 text-xs font-medium ${completed
                                       ? "bg-green-50 text-green-600"
                                       : subtask.status === "in_progress"
                                         ? "bg-blue-50 text-blue-600"
                                         : "bg-slate-100 text-slate-500"
-                                  }`}
+                                    }`}
                                 >
                                   {completed
                                     ? "Completed"
