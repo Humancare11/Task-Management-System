@@ -2,70 +2,74 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const { User, AuthIdentity, Organization, OrganizationMember } = require("../models");
 
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL,
-    },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        const email = profile.emails?.[0]?.value;
-        if (!email) {
-          return done(new Error("No email returned from Google profile."));
-        }
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          const email = profile.emails?.[0]?.value;
+          if (!email) {
+            return done(new Error("No email returned from Google profile."));
+          }
 
-        // 1. Has this Google account logged in before?
-        let authIdentity = await AuthIdentity.findOne({
-          where: { provider: "google", provider_user_id: profile.id },
-          include: { model: User, as: "user" },
-        });
-
-        if (authIdentity) {
-          return done(null, authIdentity.user);
-        }
-
-        // 2. No Google identity yet — does a user with this email already exist?
-        //    (e.g. they registered with email/password before)
-        let user = await User.findOne({ where: { email } });
-
-        if (!user) {
-          // Brand new user — Google sign-up creates their own organization,
-          // same pattern as email/password register.
-          const first_name = profile.name?.givenName || profile.displayName || "New";
-          const last_name = profile.name?.familyName || "";
-
-          user = await User.create({ first_name, last_name, email });
-
-          const slug =
-            (first_name + "-org-" + Date.now()).toLowerCase().replace(/\s+/g, "-");
-          const organization = await Organization.create({
-            name: `${first_name}'s Organization`,
-            slug,
+          // 1. Has this Google account logged in before?
+          let authIdentity = await AuthIdentity.findOne({
+            where: { provider: "google", provider_user_id: profile.id },
+            include: { model: User, as: "user" },
           });
 
-          await OrganizationMember.create({
-            organization_id: organization.id,
+          if (authIdentity) {
+            return done(null, authIdentity.user);
+          }
+
+          // 2. No Google identity yet — does a user with this email already exist?
+          //    (e.g. they registered with email/password before)
+          let user = await User.findOne({ where: { email } });
+
+          if (!user) {
+            // Brand new user — Google sign-up creates their own organization,
+            // same pattern as email/password register.
+            const first_name = profile.name?.givenName || profile.displayName || "New";
+            const last_name = profile.name?.familyName || "";
+
+            user = await User.create({ first_name, last_name, email });
+
+            const slug =
+              (first_name + "-org-" + Date.now()).toLowerCase().replace(/\s+/g, "-");
+            const organization = await Organization.create({
+              name: `${first_name}'s Organization`,
+              slug,
+            });
+
+            await OrganizationMember.create({
+              organization_id: organization.id,
+              user_id: user.id,
+              role: "owner",
+            });
+          }
+
+          // 3. Link this Google identity to the (existing or new) user.
+          await AuthIdentity.create({
             user_id: user.id,
-            role: "owner",
+            provider: "google",
+            provider_user_id: profile.id,
           });
+
+          return done(null, user);
+        } catch (error) {
+          return done(error);
         }
-
-        // 3. Link this Google identity to the (existing or new) user.
-        await AuthIdentity.create({
-          user_id: user.id,
-          provider: "google",
-          provider_user_id: profile.id,
-        });
-
-        return done(null, user);
-      } catch (error) {
-        return done(error);
       }
-    }
-  )
-);
+    )
+  );
+} else {
+  console.warn("⚠️  Google OAuth not configured (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET missing) — skipping Google login setup.");
+}
 
 // Serialize user for session
 passport.serializeUser((user, done) => {
