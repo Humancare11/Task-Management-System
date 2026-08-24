@@ -23,7 +23,7 @@ const { addProjectMember } = require("../controllers/projectMemberController");
 const { createSubtask, getSubtasks, updateSubtask, deleteSubtask } = require("../controllers/subtaskController");
 const { getComments, createComment, deleteComment } = require("../controllers/commentController");
 const { uploadAttachment, getAttachments, deleteAttachment } = require("../controllers/attachmentController");
-const { getMyTasks, } = require("../controllers/taskController");
+const { getMyTasks, getMySubtasks } = require("../controllers/taskController");
 const upload = require("../middleware/upload");
 
 // All project routes require authentication
@@ -74,6 +74,13 @@ router.get(
   "/my-tasks",
   requireRole("owner", "admin", "manager", "member", "client"),
   getMyTasks
+);
+
+// Get subtasks assigned to the logged-in user
+router.get(
+  "/my-subtasks",
+  requireRole("owner", "admin", "manager", "member", "client"),
+  getMySubtasks
 );
 
 // Get all tasks under a project
@@ -131,9 +138,10 @@ router.post(
 );
 
 // POST /api/projects/:projectId/tasks/:taskId/subtasks 
-router.post("/:projectId/tasks/:taskId/subtasks", 
-  requireRole("owner", "admin", "manager"), 
-  createSubtask 
+router.post(
+  "/:projectId/tasks/:taskId/subtasks",
+  requireRole("owner", "admin", "manager", "member"),
+  createSubtask
 );
 
 // GET /api/projects/:projectId/tasks/:taskId/subtasks
@@ -180,6 +188,27 @@ router.delete(
   deleteComment
 );
 
+// GET /api/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/comments
+router.get(
+  "/:projectId/tasks/:taskId/subtasks/:subtaskId/comments",
+  requireRole("owner", "admin", "manager", "member"),
+  getComments
+);
+
+// POST /api/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/comments
+router.post(
+  "/:projectId/tasks/:taskId/subtasks/:subtaskId/comments",
+  requireRole("owner", "admin", "manager", "member"),
+  createComment
+);
+
+// DELETE /api/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/comments/:commentId
+router.delete(
+  "/:projectId/tasks/:taskId/subtasks/:subtaskId/comments/:commentId",
+  requireRole("owner", "admin", "manager", "member"),
+  deleteComment
+);
+
 // GET /api/projects/:projectId/tasks/:taskId/attachments
 router.get(
   "/:projectId/tasks/:taskId/attachments",
@@ -202,11 +231,42 @@ router.delete(
   deleteAttachment
 );
 
+// GET /api/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/attachments
+router.get(
+  "/:projectId/tasks/:taskId/subtasks/:subtaskId/attachments",
+  requireRole("owner", "admin", "manager", "member"),
+  getAttachments
+);
 
-// Get tasks assigned to the logged-in user 
-router.get( "/my-tasks", 
-  requireRole("owner", "admin", "manager", "member", "client"), 
-  getMyTasks 
+// POST /api/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/attachments
+router.post(
+  "/:projectId/tasks/:taskId/subtasks/:subtaskId/attachments",
+  requireRole("owner", "admin", "manager", "member"),
+  upload.single("file"),
+  uploadAttachment
+);
+
+// DELETE /api/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/attachments/:attachmentId
+router.delete(
+  "/:projectId/tasks/:taskId/subtasks/:subtaskId/attachments/:attachmentId",
+  requireRole("owner", "admin", "manager", "member"),
+  deleteAttachment
+);
+
+
+// GET comment attachments
+router.get(
+  "/:projectId/tasks/:taskId/comments/:commentId/attachments",
+  requireRole("owner", "admin", "manager", "member"),
+  getAttachments
+);
+
+// POST comment attachment
+router.post(
+  "/:projectId/tasks/:taskId/comments/:commentId/attachments",
+  requireRole("owner", "admin", "manager", "member"),
+  upload.single("file"),
+  uploadAttachment
 );
 
 module.exports = router;

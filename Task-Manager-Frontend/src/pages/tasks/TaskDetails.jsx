@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Download,
   MoreVertical,
   Pencil,
@@ -11,6 +13,7 @@ import {
   Share2,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 
 import AppLayout from "../../components/layout/AppLayout.jsx";
@@ -22,12 +25,14 @@ import ConfirmDialog from "../../components/common/ConfirmDialog.jsx";
 import TaskStatusBadge from "../../components/tasks/TaskStatusBadge.jsx";
 import TaskPriorityBadge from "../../components/tasks/TaskPriorityBadge.jsx";
 import TaskFormModal from "../../components/tasks/TaskFormModal.jsx";
-
+import SubtaskFormModal from "../../components/subtasks/SubtaskFormModal.jsx";
+import SubtaskDetailPanel from "../../components/subtasks/SubtaskDetailPanel.jsx";
 import { getTask, updateTask, deleteTask } from "../../api/tasks.js";
 import {
   listAttachments,
   uploadAttachment,
   deleteAttachment,
+  uploadCommentAttachment,
 } from "../../api/attachments.js";
 
 import {
@@ -37,7 +42,6 @@ import {
 } from "../../api/comments.js";
 import {
   listSubtasks,
-  createSubtask,
   updateSubtask,
   deleteSubtask,
 } from "../../api/subtasks.js";
@@ -45,7 +49,13 @@ import { listProjectMembers } from "../../api/projectMembers.js";
 import { getSocket } from "../../lib/socket.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { canEditTask, canDeleteTask } from "../../config/permissions.js";
+import {
+  canEditTask,
+  canDeleteTask,
+  canEditSubtaskFully,
+  canUpdateSubtaskStatus,
+  canDeleteComment,
+} from "../../config/permissions.js";
 import { API_ORIGIN } from "../../api/client.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -93,11 +103,6 @@ const STATUS_CYCLE_LABEL = {
   completed: "Reset to to-do",
 };
 
-/** Whether the logged-in user can manage subtasks (create / delete / full edit) */
-function canManageSubtasks(user) {
-  return ["owner", "admin", "manager"].includes(user?.role);
-}
-
 // ─── component ──────────────────────────────────────────────────────────────
 
 export default function TaskDetails() {
@@ -117,6 +122,10 @@ export default function TaskDetails() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // ── subtask modal/dialog state ──
+  const [subtaskModalOpen, setSubtaskModalOpen] = useState(false);
+  const [editingSubtask, setEditingSubtask] = useState(null);
+
   // ── tabs ──
   const [activeTab, setActiveTab] = useState("subtasks");
 
@@ -125,13 +134,7 @@ export default function TaskDetails() {
   const [subtaskUpdating, setSubtaskUpdating] = useState({}); // { [id]: true }
   const [subtaskDeleting, setSubtaskDeleting] = useState({}); // { [id]: true }
   const [subtaskToDelete, setSubtaskToDelete] = useState(null); // subtask object
-
-  // ── add-subtask inline form ──
-  const [addingSubtask, setAddingSubtask] = useState(false);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
-  const [newSubtaskSaving, setNewSubtaskSaving] = useState(false);
-  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState("");
-  const addInputRef = useRef(null);
+  const [expandedSubtaskId, setExpandedSubtaskId] = useState(null);
 
   // ── attachment state ──
   const [attachments, setAttachments] = useState([]);
@@ -146,6 +149,8 @@ export default function TaskDetails() {
   const [commentText, setCommentText] = useState("");
   const [commentSending, setCommentSending] = useState(false);
   const [commentToDelete, setCommentToDelete] = useState(null);
+  const [commentFile, setCommentFile] = useState(null);
+  const commentFileInputRef = useRef(null);
   const [commentDeleting, setCommentDeleting] = useState(false);
 
   // ─── data loading ────────────────────────────────────────────────────────
@@ -191,7 +196,9 @@ export default function TaskDetails() {
       );
     }
     function handleSubtaskUpdated(subtask) {
-      setSubtasks((prev) => prev.map((s) => (s.id === subtask.id ? subtask : s)));
+      setSubtasks((prev) =>
+        prev.map((s) => (s.id === subtask.id ? subtask : s)),
+      );
     }
     function handleSubtaskDeleted({ subtaskId }) {
       setSubtasks((prev) => prev.filter((s) => s.id !== subtaskId));
@@ -221,13 +228,6 @@ export default function TaskDetails() {
       socket.off("comment:deleted", handleCommentDeleted);
     };
   }, [taskId]);
-
-  // Focus add-input when form opens
-  useEffect(() => {
-    if (addingSubtask) {
-      setTimeout(() => addInputRef.current?.focus(), 50);
-    }
-  }, [addingSubtask]);
 
   // ─── task actions ─────────────────────────────────────────────────────────
 
@@ -312,42 +312,6 @@ export default function TaskDetails() {
       .finally(() =>
         setSubtaskUpdating((prev) => ({ ...prev, [subtask.id]: false })),
       );
-  }
-
-  /** Save the inline new-subtask form */
-  function handleAddSubtask() {
-    const title = newSubtaskTitle.trim();
-    if (!title) return;
-
-    setNewSubtaskSaving(true);
-
-    createSubtask(projectId, taskId, {
-      title,
-      assigned_to: newSubtaskAssignee ? Number(newSubtaskAssignee) : null,
-    })
-      .then((res) => {
-        setSubtasks((prev) =>
-          prev.some((s) => s.id === res.data.subtask.id)
-            ? prev
-            : [...prev, res.data.subtask],
-        );
-        setNewSubtaskTitle("");
-        setNewSubtaskAssignee("");
-        setAddingSubtask(false);
-        toast.success("Subtask created.");
-      })
-      .catch((err) =>
-        toast.error(err.response?.data?.message || "Failed to create subtask."),
-      )
-      .finally(() => setNewSubtaskSaving(false));
-  }
-
-  function handleAddSubtaskKeyDown(e) {
-    if (e.key === "Enter") handleAddSubtask();
-    if (e.key === "Escape") {
-      setAddingSubtask(false);
-      setNewSubtaskTitle("");
-    }
   }
 
   /** Confirm-delete a subtask */
@@ -435,12 +399,30 @@ export default function TaskDetails() {
 
     createComment(projectId, taskId, content)
       .then((res) => {
+        const comment = res.data.comment;
+
+        if (commentFile) {
+          return uploadCommentAttachment(projectId, taskId, comment.id, commentFile)
+            .then((attachRes) => ({
+              ...comment,
+              attachments: [attachRes.data.attachment],
+            }))
+            .catch((err) => {
+              toast.error(
+                err.response?.data?.message || "Comment sent, but file failed to upload.",
+              );
+              return comment;
+            });
+        }
+
+        return comment;
+      })
+      .then((comment) => {
         setComments((prev) =>
-          prev.some((c) => c.id === res.data.comment.id)
-            ? prev
-            : [...prev, res.data.comment],
+          prev.some((c) => c.id === comment.id) ? prev : [...prev, comment],
         );
         setCommentText("");
+        setCommentFile(null);
       })
       .catch((err) =>
         toast.error(err.response?.data?.message || "Failed to send comment."),
@@ -453,6 +435,11 @@ export default function TaskDetails() {
       e.preventDefault();
       handleSendComment();
     }
+  }
+
+  function handleCommentFileChange(e) {
+    setCommentFile(e.target.files[0] || null);
+    e.target.value = "";
   }
 
   function handleCommentDeleteConfirm() {
@@ -503,7 +490,7 @@ export default function TaskDetails() {
     user?.id === task?.assigned_to &&
     ["member", "manager"].includes(user?.role);
 
-  const canManage = canManageSubtasks(user);
+  const canManage = canEditSubtaskFully(user);
 
   // ─── render ───────────────────────────────────────────────────────────────
 
@@ -783,12 +770,28 @@ export default function TaskDetails() {
                       <>
                         {/* Header row */}
                         <div className="mb-4 flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-slate-900">
-                            Task Subtasks
-                          </h3>
-                          <span className="text-xs text-slate-500">
-                            {completedSubtasks} / {subtasks.length} completed
-                          </span>
+                          <div>
+                            <h3 className="text-sm font-semibold text-slate-900">
+                              Task Subtasks
+                            </h3>
+
+                            <span className="text-xs text-slate-500">
+                              {completedSubtasks} / {subtasks.length} completed
+                            </span>
+                          </div>
+
+                          {["owner", "admin", "manager", "member"].includes(
+                            user?.role,
+                          ) && (
+                            <Button
+                              onClick={() => {
+                                setEditingSubtask(null);
+                                setSubtaskModalOpen(true);
+                              }}
+                            >
+                              + Add Subtask
+                            </Button>
+                          )}
                         </div>
 
                         {/* Progress bar */}
@@ -802,7 +805,7 @@ export default function TaskDetails() {
                     )}
 
                     {/* Subtask list */}
-                    {subtasks.length === 0 && !addingSubtask && (
+                    {subtasks.length === 0 && (
                       <div className="py-6 text-center">
                         <p className="text-sm text-slate-400">
                           No subtasks yet.
@@ -818,10 +821,7 @@ export default function TaskDetails() {
                           const isDeleting = !!subtaskDeleting[subtask.id];
 
                           // Only assigned member or managers can toggle status
-                          const canToggle =
-                            canManage ||
-                            (user?.role === "member" &&
-                              subtask.assigned_to === user?.id);
+                          const canToggle = canUpdateSubtaskStatus(user, subtask);
 
                           // Warn owner if task is due within 2 days and subtask is incomplete
                           const isDueSoon =
@@ -832,10 +832,13 @@ export default function TaskDetails() {
                               return diff > 0 && diff < 2 * 24 * 60 * 60 * 1000;
                             })();
 
+                          const isExpanded = expandedSubtaskId === subtask.id;
+
                           return (
+                            <div key={subtask.id}>
                             <div
-                              key={subtask.id}
-                              className={`group flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${isUpdating || isDeleting
+                              className={`group flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${
+                                isUpdating || isDeleting
                                   ? "border-slate-100 opacity-60"
                                   : isDueSoon
                                     ? "border-amber-200 bg-amber-50"
@@ -902,6 +905,19 @@ export default function TaskDetails() {
                                       {subtask.description}
                                     </p>
                                   )}
+                                  {Array.isArray(subtask.tags) &&
+                                    subtask.tags.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {subtask.tags.map((tag) => (
+                                          <span
+                                            key={tag.id}
+                                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500"
+                                          >
+                                            {tag.name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                 </div>
                               </button>
 
@@ -953,89 +969,59 @@ export default function TaskDetails() {
                                     <Trash2 size={13} />
                                   </button>
                                 )}
+
+                                {/* Expand/collapse — comments & attachments */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedSubtaskId((prev) =>
+                                      prev === subtask.id ? null : subtask.id,
+                                    )
+                                  }
+                                  className="rounded p-1 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600"
+                                  title={
+                                    isExpanded
+                                      ? "Hide comments & attachments"
+                                      : "Show comments & attachments"
+                                  }
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown size={14} />
+                                  ) : (
+                                    <ChevronRight size={14} />
+                                  )}
+                                </button>
                               </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="mt-1.5">
+                                <SubtaskDetailPanel
+                                  projectId={projectId}
+                                  taskId={taskId}
+                                  subtask={subtask}
+                                />
+                              </div>
+                            )}
                             </div>
                           );
                         })}
                       </div>
                     )}
 
-                    {/* Inline add form */}
-                    {addingSubtask ? (
-                      <div className="mt-3 space-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
-                        {/* Title row */}
-                        <div className="flex items-center gap-2">
-                          <Plus size={14} className="shrink-0 text-sky-400" />
-                          <input
-                            ref={addInputRef}
-                            type="text"
-                            value={newSubtaskTitle}
-                            onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                            onKeyDown={handleAddSubtaskKeyDown}
-                            placeholder="Subtask title…"
-                            disabled={newSubtaskSaving}
-                            className="flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none"
-                          />
-                        </div>
-
-                        {/* Assignee + actions row */}
-                        <div className="flex items-center gap-2 pl-5">
-                          <select
-                            value={newSubtaskAssignee}
-                            onChange={(e) =>
-                              setNewSubtaskAssignee(e.target.value)
-                            }
-                            disabled={newSubtaskSaving}
-                            className="flex-1 rounded border border-sky-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none focus:border-sky-400"
-                          >
-                            <option value="">Assign to… (optional)</option>
-                            {members.map((m) => {
-                              const person = m.user || m;
-                              return (
-                                <option key={person.id} value={person.id}>
-                                  {`${person.first_name || ""} ${person.last_name || ""}`.trim() ||
-                                    person.email}
-                                </option>
-                              );
-                            })}
-                          </select>
-
-                          <button
-                            type="button"
-                            onClick={handleAddSubtask}
-                            disabled={
-                              !newSubtaskTitle.trim() || newSubtaskSaving
-                            }
-                            className="rounded px-2 py-1 text-xs font-semibold text-sky-600 transition hover:bg-sky-100 disabled:opacity-40"
-                          >
-                            {newSubtaskSaving ? "Saving…" : "Save"}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddingSubtask(false);
-                              setNewSubtaskTitle("");
-                              setNewSubtaskAssignee("");
-                            }}
-                            className="rounded px-2 py-1 text-xs text-slate-400 transition hover:bg-slate-100"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Add button — management roles only */
-                      canManage && (
-                        <button
-                          type="button"
-                          onClick={() => setAddingSubtask(true)}
-                          className="mt-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400 transition hover:border-slate-300 hover:text-slate-600"
-                        >
-                          <Plus size={14} />
-                          Add subtask
-                        </button>
-                      )
+                    {/* Add button — management roles only */}
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSubtask(null);
+                          setSubtaskModalOpen(true);
+                        }}
+                        className="mt-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400 transition hover:border-slate-300 hover:text-slate-600"
+                      >
+                        <Plus size={14} />
+                        Add subtask
+                      </button>
                     )}
                   </div>
                 )}
@@ -1052,10 +1038,7 @@ export default function TaskDetails() {
                       )}
 
                       {comments.map((comment) => {
-                        const isOwn = comment.author?.id === user?.id;
-                        const canDelete =
-                          isOwn ||
-                          ["owner", "admin", "manager"].includes(user?.role);
+                        const canDelete = canDeleteComment(user, comment);
 
                         return (
                           <div key={comment.id} className="group flex gap-3">
@@ -1095,6 +1078,28 @@ export default function TaskDetails() {
                               <p className="mt-0.5 text-sm leading-6 text-slate-600">
                                 {comment.content}
                               </p>
+
+                              {comment.attachments?.length > 0 && (
+                                <div className="mt-2 flex flex-col gap-1.5">
+                                  {comment.attachments.map((file) => (
+                                    <a
+                                      key={file.id}
+                                      href={`${API_ORIGIN}${file.url}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                                    >
+                                      <Paperclip size={13} className="shrink-0 text-slate-400" />
+                                      <span className="max-w-[200px] truncate">
+                                        {file.file_name}
+                                      </span>
+                                      <span className="shrink-0 text-slate-400">
+                                        {formatFileSize(file.file_size)}
+                                      </span>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -1125,13 +1130,39 @@ export default function TaskDetails() {
                             className="w-full resize-none rounded-t-xl px-3 pt-3 text-sm text-slate-700 placeholder-slate-400 outline-none"
                           />
 
+                          {commentFile && (
+                            <div className="flex items-center gap-2 px-3 pb-1">
+                              <span className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-700">
+                                <Paperclip size={12} />
+                                <span className="max-w-[180px] truncate">
+                                  {commentFile.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setCommentFile(null)}
+                                  className="text-sky-400 hover:text-sky-700"
+                                  title="Remove file"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </span>
+                            </div>
+                          )}
+
                           {/* Toolbar */}
                           <div className="flex items-center justify-between px-3 pb-2 pt-1">
                             <div className="flex items-center gap-3 text-slate-400">
+                              <input
+                                ref={commentFileInputRef}
+                                type="file"
+                                className="hidden"
+                                onChange={handleCommentFileChange}
+                              />
                               <button
                                 type="button"
+                                onClick={() => commentFileInputRef.current?.click()}
                                 className="transition hover:text-slate-600"
-                                title="Attach file (coming soon)"
+                                title="Attach file"
                               >
                                 <Paperclip size={15} />
                               </button>
@@ -1380,6 +1411,20 @@ export default function TaskDetails() {
         description={`Delete "${subtaskToDelete?.title}"? This cannot be undone.`}
         confirmLabel="Delete"
         loading={!!subtaskDeleting[subtaskToDelete?.id]}
+      />
+
+      <SubtaskFormModal
+        open={subtaskModalOpen}
+        onClose={() => {
+          setSubtaskModalOpen(false);
+          setEditingSubtask(null);
+        }}
+        projectId={projectId}
+        taskId={taskId}
+        mode={editingSubtask ? "edit" : "create"}
+        subtask={editingSubtask}
+        projectMembers={members}
+        onSaved={fetchAll}
       />
     </AppLayout>
   );

@@ -1,17 +1,23 @@
 import api from "./client.js";
 
-export function listComments(projectId, taskId) {
-  return api.get(`/projects/${projectId}/tasks/${taskId}/comments`);
+function commentsBase(projectId, taskId, subtaskId) {
+  return subtaskId
+    ? `/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/comments`
+    : `/projects/${projectId}/tasks/${taskId}/comments`;
 }
 
-export function createComment(projectId, taskId, content) {
-  return api.post(`/projects/${projectId}/tasks/${taskId}/comments`, {
+export function listComments(projectId, taskId, subtaskId) {
+  return api.get(commentsBase(projectId, taskId, subtaskId));
+}
+
+export function createComment(projectId, taskId, content, subtaskId) {
+  return api.post(commentsBase(projectId, taskId, subtaskId), {
     content,
   });
 }
 
-export function deleteComment(projectId, taskId, commentId) {
+export function deleteComment(projectId, taskId, commentId, subtaskId) {
   return api.delete(
-    `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`
+    `${commentsBase(projectId, taskId, subtaskId)}/${commentId}`
   );
 }

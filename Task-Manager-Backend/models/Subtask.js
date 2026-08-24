@@ -40,6 +40,22 @@ const Subtask = sequelize.define(
       defaultValue: "todo",
     },
 
+    priority: {
+  type: DataTypes.ENUM(
+    "low",
+    "medium",
+    "high",
+    "urgent"
+  ),
+  allowNull: false,
+  defaultValue: "medium",
+},
+
+due_date: {
+  type: DataTypes.DATE,
+  allowNull: true,
+},
+
     assigned_to: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,
