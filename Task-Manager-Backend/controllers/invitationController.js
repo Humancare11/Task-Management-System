@@ -79,10 +79,8 @@ exports.createInvitation = async (req, res) => {
       },
     };
 
-    if (process.env.NODE_ENV !== "production") {
-      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-      response.invitation_link = `${frontendUrl}/accept-invitation?token=${token}`;
-    }
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    response.invitation_link = `${frontendUrl}/accept-invitation?token=${token}`;
 
     return res.status(201).json(response);
   } catch (error) {

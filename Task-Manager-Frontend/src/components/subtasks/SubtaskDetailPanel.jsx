@@ -3,6 +3,7 @@ import { Download, Paperclip, Trash2, Upload } from "lucide-react";
 
 import Avatar from "../ui/Avatar.jsx";
 import ConfirmDialog from "../common/ConfirmDialog.jsx";
+import { API_ORIGIN } from "../../api/client.js";
 import {
   listComments,
   createComment,
@@ -269,7 +270,7 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <a
-                      href={`http://localhost:5000${file.url}`}
+                      href={`${API_ORIGIN}${file.url}`}
                       target="_blank"
                       rel="noreferrer"
                       className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"

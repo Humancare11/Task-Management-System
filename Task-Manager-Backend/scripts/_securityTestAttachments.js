@@ -1,7 +1,7 @@
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 
-const BASE = "http://localhost:5000/api";
+const BASE = process.env.TEST_API_URL || "http://localhost:5000/api";
 
 function mint({ id, organization_id, role }) {
   return jwt.sign({ id, organization_id, role }, process.env.JWT_SECRET, {

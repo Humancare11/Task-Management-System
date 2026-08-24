@@ -142,6 +142,8 @@ exports.login = async (req, res) => {
 // GET /api/auth/google/callback
 // Called by Passport after Google auth succeeds. req.user is set by passport.
 exports.googleCallback = async (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+
   try {
     const user = req.user;
 
@@ -150,7 +152,7 @@ exports.googleCallback = async (req, res) => {
     });
 
     if (!membership) {
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_membership`);
+      return res.redirect(`${frontendUrl}/login?error=no_membership`);
     }
 
     const token = generateToken({
@@ -161,10 +163,10 @@ exports.googleCallback = async (req, res) => {
 
     // Redirect back to frontend with the token as a query param.
     // Frontend catches this on a dedicated route and stores it.
-    res.redirect(`${process.env.FRONTEND_URL}/oauth-success?token=${token}`);
+    res.redirect(`${frontendUrl}/oauth-success?token=${token}`);
   } catch (error) {
     console.error(error);
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=server_error`);
+    res.redirect(`${frontendUrl}/login?error=server_error`);
   }
 };
 
