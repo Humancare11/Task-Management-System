@@ -389,6 +389,16 @@ Notification.belongsTo(Organization, {
   as: "organization",
 });
 
+// Comment ↔ Attachment
+Comment.hasMany(Attachment, {
+  foreignKey: "comment_id",
+  as: "attachments",
+});
+
+Attachment.belongsTo(Comment, {
+  foreignKey: "comment_id",
+  as: "comment",
+});
 
 module.exports = {
   User,

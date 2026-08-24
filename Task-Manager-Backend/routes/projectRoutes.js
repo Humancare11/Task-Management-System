@@ -253,4 +253,20 @@ router.delete(
   deleteAttachment
 );
 
+
+// GET comment attachments
+router.get(
+  "/:projectId/tasks/:taskId/comments/:commentId/attachments",
+  requireRole("owner", "admin", "manager", "member"),
+  getAttachments
+);
+
+// POST comment attachment
+router.post(
+  "/:projectId/tasks/:taskId/comments/:commentId/attachments",
+  requireRole("owner", "admin", "manager", "member"),
+  upload.single("file"),
+  uploadAttachment
+);
+
 module.exports = router;

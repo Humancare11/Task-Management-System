@@ -1,29 +1,91 @@
 const path = require("path");
 const fs = require("fs");
-const { Attachment, Task, Subtask, Project, User } = require("../models");
+const { Attachment, Task, Subtask, Comment, Project, User } = require("../models");
 
 async function resolveContext(req) {
-  const { projectId, taskId, subtaskId } = req.params;
+  const { projectId, taskId, subtaskId, commentId } = req.params;
 
   const project = await Project.findOne({
-    where: { id: projectId, organization_id: req.user.organization_id },
+    where: {
+      id: projectId,
+      organization_id: req.user.organization_id,
+    },
   });
-  if (!project) return { error: { status: 404, message: "Project not found." } };
 
-  const task = await Task.findOne({
-    where: { id: taskId, project_id: projectId, organization_id: req.user.organization_id },
-  });
-  if (!task) return { error: { status: 404, message: "Task not found." } };
-
-  let subtask = null;
-  if (subtaskId) {
-    subtask = await Subtask.findOne({
-      where: { id: subtaskId, task_id: taskId, organization_id: req.user.organization_id },
-    });
-    if (!subtask) return { error: { status: 404, message: "Subtask not found." } };
+  if (!project) {
+    return {
+      error: {
+        status: 404,
+        message: "Project not found.",
+      },
+    };
   }
 
-  return { project, task, subtask };
+  const task = await Task.findOne({
+    where: {
+      id: taskId,
+      project_id: projectId,
+      organization_id: req.user.organization_id,
+    },
+  });
+
+  if (!task) {
+    return {
+      error: {
+        status: 404,
+        message: "Task not found.",
+      },
+    };
+  }
+
+  let subtask = null;
+
+  if (subtaskId) {
+    subtask = await Subtask.findOne({
+      where: {
+        id: subtaskId,
+        task_id: taskId,
+        organization_id: req.user.organization_id,
+      },
+    });
+
+    if (!subtask) {
+      return {
+        error: {
+          status: 404,
+          message: "Subtask not found.",
+        },
+      };
+    }
+  }
+
+  let comment = null;
+
+  if (commentId) {
+    comment = await Comment.findOne({
+      where: {
+        id: commentId,
+        task_id: taskId,
+        organization_id: req.user.organization_id,
+      },
+    });
+
+    if (!comment) {
+      return {
+        error: {
+          status: 404,
+          message: "Comment not found.",
+        },
+      };
+    }
+  }
+
+  return {
+    project,
+    task,
+    subtask,
+    comment,
+  };
 }
 
 exports.uploadAttachment = async (req, res) => {
@@ -33,19 +95,20 @@ exports.uploadAttachment = async (req, res) => {
     }
 
     const { taskId } = req.params;
-    const { error, subtask } = await resolveContext(req);
+    const { error, subtask, comment } = await resolveContext(req);
     if (error) return res.status(error.status).json({ message: error.message });
 
     const attachment = await Attachment.create({
-      task_id: taskId,
-      subtask_id: subtask ? subtask.id : null,
-      organization_id: req.user.organization_id,
-      uploaded_by: req.user.id,
-      file_name: req.file.originalname,
-      file_path: req.file.filename, // just the filename, not full path
-      file_size: req.file.size,
-      mime_type: req.file.mimetype,
-    });
+  task_id: taskId,
+  subtask_id: subtask ? subtask.id : null,
+  comment_id: comment ? comment.id : null,
+  organization_id: req.user.organization_id,
+  uploaded_by: req.user.id,
+  file_name: req.file.originalname,
+  file_path: req.file.filename,
+  file_size: req.file.size,
+  mime_type: req.file.mimetype,
+});
 
     return res.status(201).json({
       message: "File uploaded successfully.",
@@ -67,13 +130,15 @@ exports.uploadAttachment = async (req, res) => {
 exports.getAttachments = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { error, subtask } = await resolveContext(req);
+    const { error, subtask, comment } = await resolveContext(req);
     if (error) return res.status(error.status).json({ message: error.message });
 
     const attachments = await Attachment.findAll({
-      where: subtask
-        ? { subtask_id: subtask.id, organization_id: req.user.organization_id }
-        : { task_id: taskId, subtask_id: null, organization_id: req.user.organization_id },
+      where: comment
+        ? { comment_id: comment.id, organization_id: req.user.organization_id }
+        : subtask
+          ? { subtask_id: subtask.id, organization_id: req.user.organization_id }
+          : { task_id: taskId, subtask_id: null, comment_id: null, organization_id: req.user.organization_id },
       include: [
         {
           model: User,
@@ -104,13 +169,15 @@ exports.getAttachments = async (req, res) => {
 exports.deleteAttachment = async (req, res) => {
   try {
     const { taskId, attachmentId } = req.params;
-    const { error, subtask } = await resolveContext(req);
+    const { error, subtask, comment } = await resolveContext(req);
     if (error) return res.status(error.status).json({ message: error.message });
 
     const attachment = await Attachment.findOne({
-      where: subtask
-        ? { id: attachmentId, subtask_id: subtask.id, organization_id: req.user.organization_id }
-        : { id: attachmentId, task_id: taskId, subtask_id: null, organization_id: req.user.organization_id },
+      where: comment
+        ? { id: attachmentId, comment_id: comment.id, organization_id: req.user.organization_id }
+        : subtask
+          ? { id: attachmentId, subtask_id: subtask.id, organization_id: req.user.organization_id }
+          : { id: attachmentId, task_id: taskId, subtask_id: null, comment_id: null, organization_id: req.user.organization_id },
     });
     if (!attachment) return res.status(404).json({ message: "Attachment not found." });
 

@@ -13,6 +13,7 @@ import {
   Share2,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 
 import AppLayout from "../../components/layout/AppLayout.jsx";
@@ -31,6 +32,7 @@ import {
   listAttachments,
   uploadAttachment,
   deleteAttachment,
+  uploadCommentAttachment,
 } from "../../api/attachments.js";
 
 import {
@@ -147,6 +149,8 @@ export default function TaskDetails() {
   const [commentText, setCommentText] = useState("");
   const [commentSending, setCommentSending] = useState(false);
   const [commentToDelete, setCommentToDelete] = useState(null);
+  const [commentFile, setCommentFile] = useState(null);
+  const commentFileInputRef = useRef(null);
   const [commentDeleting, setCommentDeleting] = useState(false);
 
   // ─── data loading ────────────────────────────────────────────────────────
@@ -395,12 +399,30 @@ export default function TaskDetails() {
 
     createComment(projectId, taskId, content)
       .then((res) => {
+        const comment = res.data.comment;
+
+        if (commentFile) {
+          return uploadCommentAttachment(projectId, taskId, comment.id, commentFile)
+            .then((attachRes) => ({
+              ...comment,
+              attachments: [attachRes.data.attachment],
+            }))
+            .catch((err) => {
+              toast.error(
+                err.response?.data?.message || "Comment sent, but file failed to upload.",
+              );
+              return comment;
+            });
+        }
+
+        return comment;
+      })
+      .then((comment) => {
         setComments((prev) =>
-          prev.some((c) => c.id === res.data.comment.id)
-            ? prev
-            : [...prev, res.data.comment],
+          prev.some((c) => c.id === comment.id) ? prev : [...prev, comment],
         );
         setCommentText("");
+        setCommentFile(null);
       })
       .catch((err) =>
         toast.error(err.response?.data?.message || "Failed to send comment."),
@@ -413,6 +435,11 @@ export default function TaskDetails() {
       e.preventDefault();
       handleSendComment();
     }
+  }
+
+  function handleCommentFileChange(e) {
+    setCommentFile(e.target.files[0] || null);
+    e.target.value = "";
   }
 
   function handleCommentDeleteConfirm() {
@@ -1051,6 +1078,28 @@ export default function TaskDetails() {
                               <p className="mt-0.5 text-sm leading-6 text-slate-600">
                                 {comment.content}
                               </p>
+
+                              {comment.attachments?.length > 0 && (
+                                <div className="mt-2 flex flex-col gap-1.5">
+                                  {comment.attachments.map((file) => (
+                                    <a
+                                      key={file.id}
+                                      href={`${API_ORIGIN}${file.url}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                                    >
+                                      <Paperclip size={13} className="shrink-0 text-slate-400" />
+                                      <span className="max-w-[200px] truncate">
+                                        {file.file_name}
+                                      </span>
+                                      <span className="shrink-0 text-slate-400">
+                                        {formatFileSize(file.file_size)}
+                                      </span>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -1081,13 +1130,39 @@ export default function TaskDetails() {
                             className="w-full resize-none rounded-t-xl px-3 pt-3 text-sm text-slate-700 placeholder-slate-400 outline-none"
                           />
 
+                          {commentFile && (
+                            <div className="flex items-center gap-2 px-3 pb-1">
+                              <span className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-700">
+                                <Paperclip size={12} />
+                                <span className="max-w-[180px] truncate">
+                                  {commentFile.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setCommentFile(null)}
+                                  className="text-sky-400 hover:text-sky-700"
+                                  title="Remove file"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </span>
+                            </div>
+                          )}
+
                           {/* Toolbar */}
                           <div className="flex items-center justify-between px-3 pb-2 pt-1">
                             <div className="flex items-center gap-3 text-slate-400">
+                              <input
+                                ref={commentFileInputRef}
+                                type="file"
+                                className="hidden"
+                                onChange={handleCommentFileChange}
+                              />
                               <button
                                 type="button"
+                                onClick={() => commentFileInputRef.current?.click()}
                                 className="transition hover:text-slate-600"
-                                title="Attach file (coming soon)"
+                                title="Attach file"
                               >
                                 <Paperclip size={15} />
                               </button>

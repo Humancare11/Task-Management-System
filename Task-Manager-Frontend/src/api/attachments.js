@@ -25,3 +25,21 @@ export function deleteAttachment(projectId, taskId, attachmentId, subtaskId) {
     `${attachmentsBase(projectId, taskId, subtaskId)}/${attachmentId}`,
   );
 }
+
+function commentAttachmentsBase(projectId, taskId, commentId) {
+  return `/projects/${projectId}/tasks/${taskId}/comments/${commentId}/attachments`;
+}
+
+export function listCommentAttachments(projectId, taskId, commentId) {
+  return api.get(commentAttachmentsBase(projectId, taskId, commentId));
+}
+
+export function uploadCommentAttachment(projectId, taskId, commentId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return api.post(
+    commentAttachmentsBase(projectId, taskId, commentId),
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+}
