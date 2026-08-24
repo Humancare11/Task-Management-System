@@ -1,4 +1,4 @@
-const { Comment, Task, Subtask, Project, User } = require("../models");
+const { Comment, Task, Subtask, Project, User, Attachment } = require("../models");
 const { createNotification } = require("../utils/notify");
 const { getIO } = require("../socket");
 
@@ -26,6 +26,21 @@ async function resolveContext(req) {
   return { project, task, subtask };
 }
 
+function serializeComment(comment) {
+  const json = comment.toJSON();
+  return {
+    ...json,
+    attachments: (json.attachments || []).map((a) => ({
+      id: a.id,
+      file_name: a.file_name,
+      file_size: a.file_size,
+      mime_type: a.mime_type,
+      url: `/uploads/${a.file_path}`,
+      created_at: a.created_at,
+    })),
+  };
+}
+
 exports.getComments = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -42,11 +57,15 @@ exports.getComments = async (req, res) => {
           as: "author",
           attributes: ["id", "first_name", "last_name", "email", "avatar_url"],
         },
+        {
+          model: Attachment,
+          as: "attachments",
+        },
       ],
       order: [["created_at", "ASC"]],
     });
 
-    return res.json({ comments });
+    return res.json({ comments: comments.map(serializeComment) });
   } catch (error) {
     console.error("Get comments error:", error);
     return res.status(500).json({ message: "Server error while fetching comments." });
@@ -82,6 +101,10 @@ exports.createComment = async (req, res) => {
           as: "author",
           attributes: ["id", "first_name", "last_name", "email", "avatar_url"],
         },
+        {
+          model: Attachment,
+          as: "attachments",
+        },
       ],
     });
 
@@ -103,14 +126,16 @@ exports.createComment = async (req, res) => {
       });
     }
 
+    const serialized = serializeComment(full);
+
     try {
       const eventName = subtask ? "subtask-comment:created" : "comment:created";
-      getIO().to(`task:${taskId}`).emit(eventName, full);
+      getIO().to(`task:${taskId}`).emit(eventName, serialized);
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }
 
-    return res.status(201).json({ message: "Comment created.", comment: full });
+    return res.status(201).json({ message: "Comment created.", comment: serialized });
   } catch (error) {
     console.error("Create comment error:", error);
     return res.status(500).json({ message: "Server error while creating comment." });
