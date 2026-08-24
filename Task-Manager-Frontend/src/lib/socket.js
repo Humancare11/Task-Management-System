@@ -5,10 +5,16 @@ let socket = null;
 
 export function getSocket() {
   if (!socket) {
-    const token = localStorage.getItem("token");
     socket = io(API_ORIGIN, {
-      auth: { token },
+      auth: (cb) => cb({ token: localStorage.getItem("token") }),
     });
   }
   return socket;
+}
+
+export function disconnectSocket() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
 }
