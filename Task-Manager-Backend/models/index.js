@@ -11,6 +11,8 @@ const Comment = require("./Comment");
 const Tag = require("./Tag");
 const Attachment = require("./Attachment");
 const Notification = require("./Notification");
+const Question = require("./Question");
+const QuestionAnswer = require("./QuestionAnswer");
 
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
@@ -400,6 +402,122 @@ Attachment.belongsTo(Comment, {
   as: "comment",
 });
 
+
+// Organization ↔ Question
+
+Organization.hasMany(Question, {
+  foreignKey: "organization_id",
+  as: "questions",
+});
+
+Question.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// Project ↔ Question
+
+Project.hasMany(Question, {
+  foreignKey: "project_id",
+  as: "questions",
+});
+
+Question.belongsTo(Project, {
+  foreignKey: "project_id",
+  as: "project",
+});
+
+// User ↔ Question (creator)
+
+User.hasMany(Question, {
+  foreignKey: "created_by",
+  as: "createdQuestions",
+});
+
+Question.belongsTo(User, {
+  foreignKey: "created_by",
+  as: "creator",
+});
+
+// User ↔ Question (assigned user)
+
+User.hasMany(Question, {
+  foreignKey: "assigned_to",
+  as: "assignedQuestions",
+});
+
+Question.belongsTo(User, {
+  foreignKey: "assigned_to",
+  as: "assignee",
+});
+
+// User ↔ Question (resolver)
+
+User.hasMany(Question, {
+  foreignKey: "resolved_by",
+  as: "resolvedQuestions",
+});
+
+Question.belongsTo(User, {
+  foreignKey: "resolved_by",
+  as: "resolver",
+});
+
+// Question ↔ QuestionAnswer
+Question.hasMany(QuestionAnswer, {
+  foreignKey: "question_id",
+  as: "answers",
+});
+
+QuestionAnswer.belongsTo(Question, {
+  foreignKey: "question_id",
+  as: "question",
+});
+
+// User ↔ QuestionAnswer
+User.hasMany(QuestionAnswer, {
+  foreignKey: "user_id",
+  as: "questionAnswers",
+});
+
+QuestionAnswer.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "author",
+});
+
+// Organization ↔ QuestionAnswer
+Organization.hasMany(QuestionAnswer, {
+  foreignKey: "organization_id",
+  as: "questionAnswers",
+});
+
+QuestionAnswer.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// Question ↔ Attachment
+Question.hasMany(Attachment, {
+  foreignKey: "question_id",
+  as: "attachments",
+});
+
+Attachment.belongsTo(Question, {
+  foreignKey: "question_id",
+  as: "question",
+});
+
+// QuestionAnswer ↔ Attachment
+QuestionAnswer.hasMany(Attachment, {
+  foreignKey: "question_answer_id",
+  as: "attachments",
+});
+
+Attachment.belongsTo(QuestionAnswer, {
+  foreignKey: "question_answer_id",
+  as: "questionAnswer",
+});
+
 module.exports = {
   User,
   Organization,
@@ -414,4 +532,6 @@ module.exports = {
   Tag,
   Attachment,
   Notification,
+  Question,
+  QuestionAnswer,
 };

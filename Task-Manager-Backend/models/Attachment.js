@@ -11,13 +11,21 @@ const Attachment = sequelize.define(
     },
     task_id: {
       type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
+      allowNull: true,
     },
     comment_id: {
   type: DataTypes.INTEGER.UNSIGNED,
   allowNull: true,
 },
     subtask_id: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+    },
+    question_id: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+    },
+    question_answer_id: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,
     },

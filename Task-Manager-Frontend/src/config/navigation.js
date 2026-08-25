@@ -7,6 +7,7 @@ import {
   Mail,
   Activity,
   Settings,
+  HelpCircle,
 } from "lucide-react";
 
 // NOTE: `roles` here controls sidebar VISIBILITY ONLY. It is not a security
@@ -27,6 +28,7 @@ export const navigationGroups = [
       { label: "Projects", path: "/projects", icon: FolderKanban, roles: ALL_ROLES },
       { label: "Tasks", path: "/tasks", icon: ListChecks, roles: ["owner", "admin", "manager"] },
       { label: "My Tasks", path: "/my-tasks", icon: UserCheck, roles: ALL_ROLES },
+      { label: "Questions", path: "/questions", icon: HelpCircle, roles: ALL_ROLES },
     ],
   },
   {

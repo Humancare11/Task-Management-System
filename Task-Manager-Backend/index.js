@@ -13,6 +13,7 @@ const projectRoutes = require("./routes/projectRoutes");
 const invitationRoutes = require("./routes/invitationRoutes");
 const { initSocket } = require("./socket");
 const notificationRoutes = require("./routes/notificationRoutes");
+const questionRoutes = require("./routes/questionRoute");
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.use("/api/organization", organizationRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/invitations", invitationRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/questions", questionRoutes);
 
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);

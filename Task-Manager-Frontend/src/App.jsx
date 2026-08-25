@@ -17,6 +17,9 @@ import Members from "./pages/members/Members.jsx";
 import Invitations from "./pages/invitations/Invitations.jsx";
 import Activity from "./pages/activity/Activity.jsx";
 import Settings from "./pages/settings/Settings.jsx";
+import Questions from "./pages/questions/Questions.jsx";
+import CreateQuestion from "./pages/questions/CreateQuestion.jsx";
+import QuestionDetails from "./pages/questions/QuestionDetails.jsx";
 
 export default function App() {
   return (
@@ -119,6 +122,30 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Settings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/questions"
+        element={
+          <ProtectedRoute>
+            <Questions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/questions/new"
+        element={
+          <ProtectedRoute>
+            <CreateQuestion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/questions/:id"
+        element={
+          <ProtectedRoute>
+            <QuestionDetails />
           </ProtectedRoute>
         }
       />
