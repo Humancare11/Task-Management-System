@@ -108,25 +108,76 @@ exports.createComment = async (req, res) => {
       ],
     });
 
-    const notifyUserId = subtask
-      ? subtask.assigned_to || task.assigned_to
-      : task.assigned_to;
+    const serialized = serializeComment(full);
 
-    if (notifyUserId && notifyUserId !== req.user.id) {
+    // ─── Mention Processing ─────────────────────────────────────────────────
+    try {
+      const { OrganizationMember } = require("../models");
+
+      const activeMembers = await OrganizationMember.findAll({
+        where: {
+          organization_id: req.user.organization_id,
+          is_active: true,
+        },
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "first_name", "last_name", "email"],
+          },
+        ],
+      });
+
+      const mentionedUsers = [];
+      const contentLower = content.toLowerCase();
+
+      for (const member of activeMembers) {
+        const u = member.user;
+        if (u && u.id !== req.user.id) {
+          const mentionKey = `@${u.first_name || ""}_${u.last_name || ""}`.trim().replace(/\s+/g, "_").toLowerCase();
+          if (contentLower.includes(mentionKey)) {
+            mentionedUsers.push(u);
+          }
+        }
+      }
+
       const actor = await User.findByPk(req.user.id, { attributes: ["first_name"] });
       const subject = subtask ? subtask.title : task.title;
-      await createNotification({
-        organizationId: req.user.organization_id,
-        userId: notifyUserId,
-        actorId: req.user.id,
-        type: subtask ? "subtask_comment_added" : "comment_added",
-        taskId: task.id,
-        projectId: projectId,
-        message: `${actor?.first_name || "Someone"} commented on "${subject}"`,
-      });
-    }
 
-    const serialized = serializeComment(full);
+      // Notify mentioned users
+      for (const mentionedUser of mentionedUsers) {
+        await createNotification({
+          organizationId: req.user.organization_id,
+          userId: mentionedUser.id,
+          actorId: req.user.id,
+          type: "comment_mention",
+          taskId: task.id,
+          projectId: projectId,
+          message: `${actor?.first_name || "Someone"} mentioned you in a comment on "${subject}"`,
+        });
+      }
+
+      // Notify assignee if not mentioned
+      const notifyUserId = subtask
+        ? subtask.assigned_to || task.assigned_to
+        : task.assigned_to;
+
+      const isMentioned = mentionedUsers.some((u) => u.id === notifyUserId);
+
+      if (notifyUserId && notifyUserId !== req.user.id && !isMentioned) {
+        await createNotification({
+          organizationId: req.user.organization_id,
+          userId: notifyUserId,
+          actorId: req.user.id,
+          type: subtask ? "subtask_comment_added" : "comment_added",
+          taskId: task.id,
+          projectId: projectId,
+          message: `${actor?.first_name || "Someone"} commented on "${subject}"`,
+        });
+      }
+    } catch (mentionErr) {
+      console.error("Mention processing error:", mentionErr);
+    }
 
     try {
       const eventName = subtask ? "subtask-comment:created" : "comment:created";

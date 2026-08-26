@@ -90,6 +90,45 @@ function getUserName(person) {
   );
 }
 
+function renderCommentContent(content, members = []) {
+  if (!content) return null;
+
+  const mentionMap = {};
+  members.forEach((member) => {
+    const u = member.user;
+    if (u) {
+      const nameStr = `@${u.first_name || ""}_${u.last_name || ""}`.trim().replace(/\s+/g, "_");
+      mentionMap[nameStr.toLowerCase()] = {
+        mention: nameStr,
+        displayName: `${u.first_name || ""} ${u.last_name || ""}`.trim()
+      };
+    }
+  });
+
+  const sortedMentions = Object.keys(mentionMap).sort((a, b) => b.length - a.length);
+  if (sortedMentions.length === 0) return content;
+
+  const escapedMentions = sortedMentions.map(m => m.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+  const pattern = new RegExp(`(${escapedMentions.join("|")})`, "gi");
+
+  const parts = content.split(pattern);
+  return parts.map((part, index) => {
+    const lowerPart = part.toLowerCase();
+    if (mentionMap[lowerPart]) {
+      const { displayName } = mentionMap[lowerPart];
+      return (
+        <span
+          key={index}
+          className="inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-xs font-semibold text-sky-700 mx-0.5 hover:bg-sky-100 transition cursor-default"
+        >
+          @{displayName}
+        </span>
+      );
+    }
+    return part;
+  });
+}
+
 /** Cycle: todo → in_progress → completed → todo */
 function nextStatus(current) {
   if (current === "todo") return "in_progress";
@@ -151,7 +190,26 @@ export default function TaskDetails() {
   const [commentToDelete, setCommentToDelete] = useState(null);
   const [commentFile, setCommentFile] = useState(null);
   const commentFileInputRef = useRef(null);
+  const commentTextAreaRef = useRef(null);
   const [commentDeleting, setCommentDeleting] = useState(false);
+
+  // ── mention autocomplete state ──
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [mentionTriggerIndex, setMentionTriggerIndex] = useState(-1);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+
+  const filteredMembers = useMemo(() => {
+    if (!mentionSearch) return members;
+    return members.filter((member) => {
+      const u = member.user;
+      if (!u) return false;
+      const fullName = `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      const query = mentionSearch.toLowerCase();
+      return fullName.includes(query) || email.includes(query);
+    });
+  }, [members, mentionSearch]);
 
   // ─── data loading ────────────────────────────────────────────────────────
 
@@ -430,7 +488,80 @@ export default function TaskDetails() {
       .finally(() => setCommentSending(false));
   }
 
+  function handleTriggerMention() {
+    setCommentText((prev) => {
+      const updated = prev.endsWith(" ") || !prev ? `${prev}@` : `${prev} @`;
+      setMentionTriggerIndex(updated.length - 1);
+      setMentionSearch("");
+      setShowMentionDropdown(true);
+      return updated;
+    });
+    setTimeout(() => {
+      commentTextAreaRef.current?.focus();
+    }, 50);
+  }
+
+  function handleCommentChange(e) {
+    const value = e.target.value;
+    setCommentText(value);
+
+    const cursor = e.target.selectionStart;
+    const textBeforeCursor = value.slice(0, cursor);
+    const lastAtIdx = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtIdx !== -1) {
+      const chunk = textBeforeCursor.slice(lastAtIdx + 1);
+      if (!/\s/.test(chunk)) {
+        setShowMentionDropdown(true);
+        setMentionSearch(chunk);
+        setMentionTriggerIndex(lastAtIdx);
+        setActiveMentionIndex(0);
+        return;
+      }
+    }
+
+    setShowMentionDropdown(false);
+    setMentionSearch("");
+    setMentionTriggerIndex(-1);
+  }
+
+  function selectMentionedMember(member) {
+    if (mentionTriggerIndex === -1) return;
+    const u = member.user || member;
+    const nameStr = `${u.first_name || ""}_${u.last_name || ""}`.trim().replace(/\s+/g, "_");
+    const beforeMention = commentText.slice(0, mentionTriggerIndex);
+    const afterCursor = commentText.slice(mentionTriggerIndex + mentionSearch.length + 1);
+
+    setCommentText(`${beforeMention}@${nameStr} ${afterCursor}`);
+    setShowMentionDropdown(false);
+    setMentionSearch("");
+    setMentionTriggerIndex(-1);
+  }
+
   function handleCommentKeyDown(e) {
+    if (showMentionDropdown && filteredMembers.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveMentionIndex((prev) => (prev + 1) % filteredMembers.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveMentionIndex((prev) => (prev - 1 + filteredMembers.length) % filteredMembers.length);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        selectMentionedMember(filteredMembers[activeMentionIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowMentionDropdown(false);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendComment();
@@ -1076,7 +1207,7 @@ export default function TaskDetails() {
                               </div>
 
                               <p className="mt-0.5 text-sm leading-6 text-slate-600">
-                                {comment.content}
+                                {renderCommentContent(comment.content, members)}
                               </p>
 
                               {comment.attachments?.length > 0 && (
@@ -1119,10 +1250,41 @@ export default function TaskDetails() {
                           />
                         </div>
 
-                        <div className="flex-1 rounded-xl border border-slate-200 bg-white transition focus-within:border-sky-300 focus-within:ring-1 focus-within:ring-sky-100">
+                        <div className="relative flex-1 rounded-xl border border-slate-200 bg-white transition focus-within:border-sky-300 focus-within:ring-1 focus-within:ring-sky-100">
+                          {showMentionDropdown && filteredMembers.length > 0 && (
+                            <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                              {filteredMembers.map((member, idx) => {
+                                const u = member.user;
+                                if (!u) return null;
+                                const isSelected = idx === activeMentionIndex;
+                                return (
+                                  <div
+                                    key={member.id}
+                                    onClick={() => selectMentionedMember(member)}
+                                    onMouseEnter={() => setActiveMentionIndex(idx)}
+                                    className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition ${
+                                      isSelected ? "bg-sky-50 text-sky-900" : "text-slate-700 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <Avatar
+                                      firstName={u.first_name}
+                                      lastName={u.last_name}
+                                      avatarUrl={u.avatar_url}
+                                      size="xs"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-semibold truncate">{u.first_name} {u.last_name}</p>
+                                      <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                           <textarea
+                            ref={commentTextAreaRef}
                             value={commentText}
-                            onChange={(e) => setCommentText(e.target.value)}
+                            onChange={handleCommentChange}
                             onKeyDown={handleCommentKeyDown}
                             placeholder="Write a comment…"
                             disabled={commentSending}
@@ -1165,6 +1327,14 @@ export default function TaskDetails() {
                                 title="Attach file"
                               >
                                 <Paperclip size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleTriggerMention}
+                                className="transition hover:text-slate-600 flex h-5 w-5 items-center justify-center rounded hover:bg-slate-100 font-semibold text-slate-500 text-sm"
+                                title="Mention a user"
+                              >
+                                @
                               </button>
                             </div>
 

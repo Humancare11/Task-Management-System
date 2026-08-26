@@ -25,6 +25,7 @@ const { getComments, createComment, deleteComment } = require("../controllers/co
 const { uploadAttachment, getAttachments, deleteAttachment } = require("../controllers/attachmentController");
 const { getMyTasks, getMySubtasks } = require("../controllers/taskController");
 const upload = require("../middleware/upload");
+const questionRoutes = require("./questionRoute");
 
 // All project routes require authentication
 router.use(requireAuth);
@@ -98,9 +99,9 @@ router.get(
 );
 
 // Update task under a project
-router.put( "/:projectId/tasks/:taskId", 
-  requireRole("owner", "admin", "manager", "member"), 
-  updateTask 
+router.put("/:projectId/tasks/:taskId",
+  requireRole("owner", "admin", "manager", "member"),
+  updateTask
 );
 
 // Delete task under a project

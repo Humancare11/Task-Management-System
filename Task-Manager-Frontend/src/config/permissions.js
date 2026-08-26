@@ -37,3 +37,19 @@ export const canDeleteAttachment = (user, attachment) =>
   attachment?.uploaded_by === user?.id ||
   attachment?.uploaded_by?.id === user?.id ||
   ORG_MANAGE_SUBTASKS.includes(user?.role);
+
+export const ORG_CREATE_QUESTION = ["owner", "admin", "manager", "member", "client"];
+export const ORG_MANAGE_QUESTION_ATTACHMENTS = ["owner", "admin", "manager", "member"];
+
+export const canCreateQuestion = (user) => ORG_CREATE_QUESTION.includes(user?.role);
+export const canUploadQuestionAttachment = (user) =>
+  ORG_MANAGE_QUESTION_ATTACHMENTS.includes(user?.role);
+
+export const canEditAnswer = (user, answer) =>
+  answer?.user_id === user?.id || ORG_ELEVATED.includes(user?.role);
+export const canDeleteAnswer = canEditAnswer;
+export const canAcceptAnswer = (user, question) => question?.created_by === user?.id;
+export const canResolveQuestion = (user, question) =>
+  question?.created_by === user?.id ||
+  question?.assigned_to === user?.id ||
+  ["owner", "admin", "manager", "member"].includes(user?.role);

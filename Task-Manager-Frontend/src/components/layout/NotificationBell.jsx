@@ -7,6 +7,10 @@ import {
   markAllNotificationsRead,
 } from "../../api/notifications.js";
 import { getSocket } from "../../lib/socket.js";
+import {
+  requestNotificationPermission,
+  showBrowserNotification,
+} from "../../utils/browserNotification.js";
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -27,11 +31,28 @@ export default function NotificationBell() {
 
   useEffect(() => {
     loadNotifications();
+    requestNotificationPermission();
 
     const socket = getSocket();
     function handleNew(notification) {
       setNotifications((prev) => [notification, ...prev]);
       setUnreadCount((c) => c + 1);
+
+      // Show browser/system notification
+      if (Notification.permission === "granted") {
+        const popup = new Notification("Task Manager", {
+          body: notification.message,
+          icon: "/favicon.ico",
+        });
+        popup.onclick = () => {
+          window.focus();
+          if (notification.project_id && notification.task_id) {
+            navigate(
+              `/projects/${notification.project_id}/tasks/${notification.task_id}`
+            );
+          }
+        };
+      }
     }
     socket.on("notification:new", handleNew);
 
@@ -49,6 +70,12 @@ export default function NotificationBell() {
   }, []);
 
   async function handleOpen() {
+    const granted = await requestNotificationPermission();
+
+    if (granted) {
+      console.log("Browser notifications enabled.");
+    }
+
     setOpen((v) => !v);
   }
 
@@ -138,10 +165,9 @@ export default function NotificationBell() {
               notifications.map((n) => (
                 <div
                   key={n.id}
-                  onClick={() => handleNotificationClick(n)}
-                  className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${
-                    n.is_read ? "text-slate-500" : "bg-primary/5 text-ink"
-                  }`}
+                  onClick={() => handleView(n)}
+                  className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${n.is_read ? "text-slate-500" : "bg-primary/5 text-ink"
+                    }`}
                 >
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate">{n.message}</span>
