@@ -13,6 +13,8 @@ const Attachment = require("./Attachment");
 const Notification = require("./Notification");
 const Question = require("./Question");
 const QuestionAnswer = require("./QuestionAnswer");
+const MonitoringAgent = require("./MonitoringAgent");
+const MonitoringEnrollment = require("./MonitoringEnrollment");
 
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
@@ -518,6 +520,66 @@ Attachment.belongsTo(QuestionAnswer, {
   as: "questionAnswer",
 });
 
+
+// Organization ↔ MonitoringAgent
+
+Organization.hasMany(MonitoringAgent, {
+  foreignKey: "organization_id",
+  as: "monitoringAgents",
+});
+
+MonitoringAgent.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// User ↔ MonitoringAgent
+
+User.hasMany(MonitoringAgent, {
+  foreignKey: "user_id",
+  as: "monitoringAgents",
+});
+
+MonitoringAgent.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user",
+});
+
+// Organization ↔ MonitoringEnrollment
+Organization.hasMany(MonitoringEnrollment, {
+  foreignKey: "organization_id",
+  as: "monitoringEnrollments",
+});
+
+MonitoringEnrollment.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
+// User ↔ MonitoringEnrollment (employee)
+
+User.hasMany(MonitoringEnrollment, {
+  foreignKey: "user_id",
+  as: "monitoringEnrollments",
+});
+
+MonitoringEnrollment.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user",
+});
+
+// User ↔ MonitoringEnrollment (admin who created it)
+
+User.hasMany(MonitoringEnrollment, {
+  foreignKey: "created_by",
+  as: "createdMonitoringEnrollments",
+});
+
+MonitoringEnrollment.belongsTo(User, {
+  foreignKey: "created_by",
+  as: "createdBy",
+});
+
 module.exports = {
   User,
   Organization,
@@ -534,4 +596,6 @@ module.exports = {
   Notification,
   Question,
   QuestionAnswer,
+  MonitoringAgent,
+  MonitoringEnrollment,
 };
