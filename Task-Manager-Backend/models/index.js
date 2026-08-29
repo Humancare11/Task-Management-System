@@ -15,6 +15,7 @@ const Question = require("./Question");
 const QuestionAnswer = require("./QuestionAnswer");
 const MonitoringAgent = require("./MonitoringAgent");
 const MonitoringEnrollment = require("./MonitoringEnrollment");
+const MonitoringActivity = require("./MonitoringActivity");
 
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
@@ -580,6 +581,42 @@ MonitoringEnrollment.belongsTo(User, {
   as: "createdBy",
 });
 
+// MonitoringAgent ↔ MonitoringActivity
+
+MonitoringAgent.hasMany(MonitoringActivity, {
+  foreignKey: "agent_id",
+  as: "activities",
+});
+
+MonitoringActivity.belongsTo(MonitoringAgent, {
+  foreignKey: "agent_id",
+  as: "agent",
+});
+
+// User ↔ MonitoringActivity
+
+User.hasMany(MonitoringActivity, {
+  foreignKey: "user_id",
+  as: "monitoringActivities",
+});
+
+MonitoringActivity.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user",
+});
+
+// Organization ↔ MonitoringActivity
+
+Organization.hasMany(MonitoringActivity, {
+  foreignKey: "organization_id",
+  as: "monitoringActivities",
+});
+
+MonitoringActivity.belongsTo(Organization, {
+  foreignKey: "organization_id",
+  as: "organization",
+});
+
 module.exports = {
   User,
   Organization,
@@ -598,4 +635,5 @@ module.exports = {
   QuestionAnswer,
   MonitoringAgent,
   MonitoringEnrollment,
+  MonitoringActivity,
 };

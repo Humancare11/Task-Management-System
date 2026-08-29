@@ -20,6 +20,7 @@ import Settings from "./pages/settings/Settings.jsx";
 import Questions from "./pages/questions/Questions.jsx";
 import CreateQuestion from "./pages/questions/CreateQuestion.jsx";
 import QuestionDetails from "./pages/questions/QuestionDetails.jsx";
+import Monitoring from "./pages/monitoring/Monitoring.jsx";
 
 export default function App() {
   return (
@@ -138,6 +139,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <CreateQuestion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/monitoring"
+        element={
+          <ProtectedRoute>
+            <Monitoring />
           </ProtectedRoute>
         }
       />

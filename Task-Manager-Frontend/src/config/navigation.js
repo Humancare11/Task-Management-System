@@ -8,6 +8,7 @@ import {
   Activity,
   Settings,
   HelpCircle,
+  MonitorSmartphone,
 } from "lucide-react";
 
 // NOTE: `roles` here controls sidebar VISIBILITY ONLY. It is not a security
@@ -42,6 +43,7 @@ export const navigationGroups = [
     title: "INSIGHTS",
     items: [
       { label: "Activity", path: "/activity", icon: Activity, roles: ["owner", "admin", "manager", "member"] },
+      { label: "Monitoring", path: "/monitoring", icon: MonitorSmartphone, roles: ["owner", "admin", "manager"] },
     ],
   },
   {

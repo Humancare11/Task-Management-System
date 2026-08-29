@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>Task Monitoring Agent</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #ffffff;
+        --ink: #1e293b;
+        --muted: #64748b;
+        --border: #e2e8f0;
+        --primary: #4f46e5;
+        --primary-hover: #4338ca;
+        --ok: #16a34a;
+        --err: #dc2626;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: linear-gradient(160deg, #1e293b, #0f172a);
+        color: var(--ink);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        background: var(--card);
+        width: 100%;
+        max-width: 420px;
+        border-radius: 14px;
+        padding: 30px 28px;
+        box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+      }
+      h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+      .subtitle { color: var(--muted); font-size: 13px; margin-top: 5px; line-height: 1.5; }
+      .field { margin-top: 18px; }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: var(--ink);
+      }
+      input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-family: inherit;
+        color: var(--ink);
+      }
+      input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+      .field-hint { color: var(--muted); font-size: 11px; margin-top: 5px; line-height: 1.45; }
+      .secret-row { position: relative; }
+      .secret-row input { padding-right: 58px; }
+      .toggle {
+        position: absolute;
+        right: 6px;
+        top: 21px;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        padding: 4px 6px;
+      }
+      .toggle:hover { color: var(--ink); }
+      .field-error { color: var(--err); font-size: 11px; margin-top: 5px; display: none; }
+      button.primary {
+        margin-top: 22px;
+        width: 100%;
+        background: var(--primary);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 11px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      button.primary:hover { background: var(--primary-hover); }
+      button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+      .message {
+        margin-top: 14px;
+        font-size: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        line-height: 1.5;
+        display: none;
+      }
+      .message.error { display: block; background: #fef2f2; color: var(--err); }
+      .message.info { display: block; background: #eef2ff; color: var(--primary); }
+      .hidden { display: none !important; }
+
+      /* connected view */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: #f0fdf4;
+        color: var(--ok);
+        font-weight: 700;
+        font-size: 14px;
+        padding: 8px 12px;
+        border-radius: 999px;
+      }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+      .status-list { margin-top: 18px; border-top: 1px solid var(--border); }
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 11px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+      }
+      .status-row .k { color: var(--muted); }
+      .status-row .v { font-weight: 600; color: var(--ok); }
+      .meta { margin-top: 14px; font-size: 11px; color: var(--muted); word-break: break-all; line-height: 1.5; }
+      button.link {
+        margin-top: 18px;
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.link:hover { color: var(--ink); border-color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <!-- ---------- SETUP VIEW ---------- -->
+    <div class="card" id="setup-view">
+      <h1>Task Monitoring Agent</h1>
+      <p class="subtitle">Connect this computer to your organization.</p>
+
+      <div class="field">
+        <label for="apiBaseUrl">API URL</label>
+        <input
+          id="apiBaseUrl"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="https://tms-production-5c78.up.railway.app/api"
+        />
+        <p class="field-hint">
+          Pre-filled with the production server. Change this only if you are
+          running the backend locally for development.
+        </p>
+        <p class="field-error" id="err-apiBaseUrl"></p>
+      </div>
+
+      <div class="field">
+        <label for="agentUuid">Agent UUID</label>
+        <input id="agentUuid" type="text" spellcheck="false" autocomplete="off" placeholder="Paste Agent UUID" />
+        <p class="field-error" id="err-agentUuid"></p>
+      </div>
+
+      <div class="field">
+        <label for="agentSecret">Agent Secret</label>
+        <div class="secret-row">
+          <input id="agentSecret" type="password" autocomplete="off" placeholder="Paste Agent Secret" />
+          <button type="button" class="toggle" id="toggleSecret">SHOW</button>
+        </div>
+        <p class="field-error" id="err-agentSecret"></p>
+      </div>
+
+      <button class="primary" id="connectBtn">Connect Agent</button>
+      <div class="message" id="setup-message"></div>
+    </div>
+
+    <!-- ---------- CONNECTED VIEW ---------- -->
+    <div class="card hidden" id="connected-view">
+      <h1>Task Monitoring Agent</h1>
+      <p class="subtitle" style="margin-bottom: 16px;">Monitoring is active on this computer.</p>
+
+      <span class="badge"><span class="dot"></span> Agent Connected</span>
+
+      <div id="device-line" class="meta hidden"></div>
+
+      <div class="status-list">
+        <div class="status-row"><span class="k">Status</span><span class="v">● Monitoring is active</span></div>
+        <div class="status-row"><span class="k">Heartbeat</span><span class="v">Connected</span></div>
+        <div class="status-row"><span class="k">Activity Monitoring</span><span class="v">Active</span></div>
+        <div class="status-row"><span class="k">Website Monitoring</span><span class="v">Active</span></div>
+        <div class="status-row"><span class="k">Idle Detection</span><span class="v">Active</span></div>
+      </div>
+
+      <div class="meta" id="agent-meta"></div>
+
+      <p class="subtitle" id="background-hint" style="margin-top: 14px;">
+        You can close this window — the monitoring agent keeps running in the
+        Windows system tray. Use the tray icon's “Exit Agent” to stop it.
+      </p>
+
+      <button class="link" id="reconfigureBtn">Settings / Reconfigure</button>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      // Default backend for production testing. The real value is supplied by the
+      // main process via state.defaultApiBaseUrl; this is only the fallback used
+      // if that value is ever missing. The field stays editable for local dev.
+      const DEFAULT_API_BASE_URL = "https://tms-production-5c78.up.railway.app/api";
+
+      const ERROR_TEXT = {
+        invalid_url:
+          "Enter a valid API URL, for example https://tms-production-5c78.up.railway.app/api",
+        missing: "Please fill in every field.",
+        auth: "Unable to connect. Please check the Agent UUID and Agent Secret.",
+        network:
+          "Unable to reach the monitoring server. Please check your network connection and try again.",
+        server_error: "Unable to connect. Please try again in a moment.",
+        no_secure_storage:
+          "Secure credential storage is not available on this computer. Setup cannot continue safely.",
+        save_failed: "Could not save the configuration securely. Please try again.",
+        start_failed: "Connected, but monitoring failed to start. Please try again.",
+      };
+
+      function showView(mode) {
+        $("setup-view").classList.toggle("hidden", mode === "connected");
+        $("connected-view").classList.toggle("hidden", mode !== "connected");
+      }
+
+      function prefillApiUrl(state) {
+        $("apiBaseUrl").value =
+          (state && state.defaultApiBaseUrl) || DEFAULT_API_BASE_URL;
+      }
+
+      function clearFieldErrors() {
+        ["apiBaseUrl", "agentUuid", "agentSecret"].forEach((f) => {
+          const el = $("err-" + f);
+          el.style.display = "none";
+          el.textContent = "";
+        });
+        $("setup-message").className = "message";
+        $("setup-message").textContent = "";
+      }
+
+      function setFieldError(field, text) {
+        const el = $("err-" + field);
+        el.textContent = text;
+        el.style.display = "block";
+      }
+
+      function setMessage(text, kind) {
+        const el = $("setup-message");
+        el.textContent = text;
+        el.className = "message " + (kind || "error");
+      }
+
+      function setConnecting(isConnecting) {
+        const btn = $("connectBtn");
+        btn.disabled = isConnecting;
+        btn.textContent = isConnecting ? "Connecting…" : "Connect Agent";
+      }
+
+      function renderConnected(state) {
+        showView("connected");
+        if (state.deviceName) {
+          $("device-line").textContent = "Device: " + state.deviceName;
+          $("device-line").classList.remove("hidden");
+        }
+        const parts = [];
+        if (state.agent && state.agent.agent_uuid) parts.push("Agent: " + state.agent.agent_uuid);
+        if (state.agent && state.agent.last_seen_at)
+          parts.push("Last heartbeat: " + new Date(state.agent.last_seen_at).toLocaleString());
+        $("agent-meta").textContent = parts.join("  ·  ");
+      }
+
+      async function init() {
+        const state = await window.agentSetup.getState();
+        prefillApiUrl(state);
+        if (!state.secureStorageAvailable) {
+          setMessage(ERROR_TEXT.no_secure_storage, "error");
+          $("connectBtn").disabled = true;
+        }
+        if (state.mode === "connected") {
+          renderConnected(state);
+        } else {
+          showView("setup");
+        }
+      }
+
+      $("toggleSecret").addEventListener("click", () => {
+        const input = $("agentSecret");
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        $("toggleSecret").textContent = show ? "HIDE" : "SHOW";
+      });
+
+      $("connectBtn").addEventListener("click", async () => {
+        clearFieldErrors();
+
+        const apiBaseUrl = $("apiBaseUrl").value.trim();
+        const agentUuid = $("agentUuid").value.trim();
+        const agentSecret = $("agentSecret").value;
+
+        let hasError = false;
+        if (!apiBaseUrl) { setFieldError("apiBaseUrl", "API URL is required."); hasError = true; }
+        else if (!/^https?:\/\/.+/i.test(apiBaseUrl)) {
+          setFieldError("apiBaseUrl", "API URL must start with http:// or https://");
+          hasError = true;
+        }
+        if (!agentUuid) { setFieldError("agentUuid", "Agent UUID is required."); hasError = true; }
+        if (!agentSecret) { setFieldError("agentSecret", "Agent Secret is required."); hasError = true; }
+        if (hasError) return;
+
+        setConnecting(true);
+        setMessage("Connecting…", "info");
+
+        let res;
+        try {
+          res = await window.agentSetup.connect({ apiBaseUrl, agentUuid, agentSecret });
+        } catch {
+          res = { ok: false, code: "server_error" };
+        }
+
+        if (res && res.ok) {
+          const state = await window.agentSetup.getState();
+          renderConnected(state);
+          return;
+        }
+
+        setConnecting(false);
+        setMessage(ERROR_TEXT[res && res.code] || ERROR_TEXT.server_error, "error");
+      });
+
+      $("reconfigureBtn").addEventListener("click", async () => {
+        await window.agentSetup.reconfigure();
+        $("agentSecret").value = "";
+        $("agentUuid").value = "";
+        $("agentSecret").type = "password";
+        $("toggleSecret").textContent = "SHOW";
+        clearFieldErrors();
+        setConnecting(false);
+        const state = await window.agentSetup.getState();
+        prefillApiUrl(state);
+        showView("setup");
+      });
+
+      if (window.agentSetup.onRefresh) {
+        window.agentSetup.onRefresh(async () => {
+          const state = await window.agentSetup.getState();
+          if (state.mode === "connected") renderConnected(state);
+          else {
+            prefillApiUrl(state);
+            showView("setup");
+          }
+        });
+      }
+
+      init();
+    </script>
+  </body>
+</html>

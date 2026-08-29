@@ -1,0 +1,40 @@
+{
+  "name": "task-monitoring-agent",
+  "version": "1.0.0",
+  "description": "Desktop monitoring agent for Task Management System",
+  "main": "src/main.js",
+  "author": "Humancare",
+  "scripts": {
+    "start": "electron .",
+    "heartbeat": "node src/runHeartbeat.js",
+    "agent": "node src/runAgent.js",
+    "test:agent": "node test/agent.test.js",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.tms.monitoringagent",
+    "productName": "Task Monitoring Agent",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "agent.config.json",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

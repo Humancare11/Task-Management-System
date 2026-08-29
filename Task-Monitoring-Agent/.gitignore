@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+
+# Local agent credentials — never commit real values.
+agent.config.json
+.env
+.env.local
