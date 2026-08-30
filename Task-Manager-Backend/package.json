@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js"
+    "migrate": "sequelize-cli db:migrate --env production",
+    "start": "npm run migrate && node index.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -21,10 +22,10 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "sequelize": "^6.37.3",
+    "sequelize-cli": "^6.6.5",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4",
-    "sequelize-cli": "^6.6.5"
+    "nodemon": "^3.1.4"
   }
 }
