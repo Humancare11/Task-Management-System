@@ -43,7 +43,7 @@ export const navigationGroups = [
     title: "INSIGHTS",
     items: [
       { label: "Activity", path: "/activity", icon: Activity, roles: ["owner", "admin", "manager", "member"] },
-      { label: "Monitoring", path: "/monitoring", icon: MonitorSmartphone, roles: ["owner", "admin", "manager"] },
+      { label: "Monitoring", path: "/monitoring", icon: MonitorSmartphone, roles: ["owner", "admin"] },
     ],
   },
   {

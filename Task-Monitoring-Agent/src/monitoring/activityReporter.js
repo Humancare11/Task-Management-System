@@ -13,15 +13,32 @@ const logger = require("../utils/logger");
 
 const ACTIVITIES_PATH = "/monitoring/agent/activities";
 
+// Hard cap on unsent activities kept in memory. The buffer is retry-on-failure
+// (see flush), so during a long backend/network outage it would otherwise grow
+// without bound. When the cap is exceeded the OLDEST unsent activities are
+// dropped so the agent process cannot run out of memory. 500 completed sessions
+// is many hours of activity, so a realistic outage never hits this.
+const MAX_RETAINED_ACTIVITIES = 500;
+
 class ActivityReporter {
     constructor(config) {
         this.config = config;
         this.buffer = [];
         this.maxBufferSize = config.activityBufferMaxSize;
+        // Serializes flush(): concurrent callers (e.g. a running poll tick and
+        // stopActivityTracking()) must never POST the same snapshot twice.
+        this._flushing = null;
     }
 
     add(activity) {
         this.buffer.push(activity);
+        if (this.buffer.length > MAX_RETAINED_ACTIVITIES) {
+            const overflow = this.buffer.length - MAX_RETAINED_ACTIVITIES;
+            this.buffer.splice(0, overflow);
+            logger.warn(
+                `Activity buffer exceeded ${MAX_RETAINED_ACTIVITIES}; dropped ${overflow} oldest unsent activity(ies).`,
+            );
+        }
     }
 
     get pendingCount() {
@@ -33,6 +50,20 @@ class ActivityReporter {
     }
 
     async flush() {
+        // Wait out any in-flight flush, then take the lock. A while loop (not a
+        // single await) handles more than two concurrent callers.
+        while (this._flushing) {
+            await this._flushing;
+        }
+        this._flushing = this._flushOnce();
+        try {
+            return await this._flushing;
+        } finally {
+            this._flushing = null;
+        }
+    }
+
+    async _flushOnce() {
         if (this.buffer.length === 0) {
             return { kind: "empty" };
         }

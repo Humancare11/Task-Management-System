@@ -40,6 +40,12 @@ router.post("/agent/heartbeat", agentHeartbeat);
 router.post("/agent/activities", submitMonitoringActivities);
 
 // Dashboard retrieves monitoring activities for the authenticated user's organization.
-router.get("/activities", requireAuth, getMonitoringActivities);
+// Monitoring data is owner/admin only (same as the enrollment endpoints above).
+router.get(
+  "/activities",
+  requireAuth,
+  requireRole("owner", "admin"),
+  getMonitoringActivities
+);
 
 module.exports = router;
