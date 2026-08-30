@@ -12,6 +12,7 @@ export default function AuthField({
   name,
   labelRight,
   className = "",
+  error,
   ...props
 }) {
   const [reveal, setReveal] = useState(false);
@@ -31,7 +32,11 @@ export default function AuthField({
           id={name}
           name={name}
           type={resolvedType}
-          className={`${inputClass} ${isPassword ? "pr-10" : ""}`}
+          aria-invalid={error ? "true" : undefined}
+          aria-describedby={error ? `${name}-error` : undefined}
+          className={`${inputClass} ${isPassword ? "pr-10" : ""} ${
+            error ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""
+          }`}
           {...props}
         />
         {isPassword && (
@@ -45,6 +50,11 @@ export default function AuthField({
           </button>
         )}
       </div>
+      {error && (
+        <p id={`${name}-error`} className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

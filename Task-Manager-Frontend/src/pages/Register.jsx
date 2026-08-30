@@ -2,8 +2,29 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthShell from "../components/auth/AuthShell.jsx";
 import AuthField from "../components/auth/AuthField.jsx";
+import PasswordStrength, {
+  isPasswordValid,
+} from "../components/auth/PasswordStrength.jsx";
 import api from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function mapRegisterError(err) {
+  const status = err.response?.status;
+  const message = err.response?.data?.message;
+
+  if (status === 409) {
+    return "This email is already registered. Please sign in instead.";
+  }
+  if (status === 400) {
+    return message || "Please check the details you entered and try again.";
+  }
+  if (!err.response) {
+    return "Unable to reach the server. Check your connection and try again.";
+  }
+  return "Unable to create your account right now. Please try again.";
+}
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -12,35 +33,60 @@ export default function Register() {
     last_name: "",
     email: "",
     password: "",
+    confirm_password: "",
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+  }
+
+  function validate() {
+    const errs = {};
+    if (!form.company_name.trim()) errs.company_name = "Company name is required.";
+    if (!form.first_name.trim()) errs.first_name = "First name is required.";
+    if (!form.email.trim()) errs.email = "Email is required.";
+    else if (!EMAIL_RE.test(form.email.trim())) errs.email = "Enter a valid email address.";
+    if (!isPasswordValid(form.password))
+      errs.password = "Password must be at least 8 characters.";
+    if (form.confirm_password !== form.password)
+      errs.confirm_password = "Passwords do not match.";
+    return errs;
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
 
+    const errs = validate();
     if (!acceptedTerms) {
       setError("Please accept the Terms and Conditions to continue.");
+    }
+    if (Object.keys(errs).length > 0 || !acceptedTerms) {
+      setFieldErrors(errs);
       return;
     }
 
     setLoading(true);
     try {
-      const res = await api.post("/auth/register", form);
+      const res = await api.post("/auth/register", {
+        company_name: form.company_name.trim(),
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      });
       login(res.data.token, res.data.user);
       navigate("/dashboard");
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Something went wrong. Try again.",
-      );
+      setError(mapRegisterError(err));
     } finally {
       setLoading(false);
     }
@@ -48,7 +94,7 @@ export default function Register() {
 
   return (
     <AuthShell
-      title="Create your workspace"
+      title="Create your account"
       subtitle="Set up your workspace and start managing your team's work."
       footer={
         <>
@@ -59,7 +105,7 @@ export default function Register() {
         </>
       }
     >
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
           <AuthField
             label="First name"
@@ -68,6 +114,7 @@ export default function Register() {
             onChange={handleChange}
             placeholder="John"
             autoComplete="given-name"
+            error={fieldErrors.first_name}
             required
           />
           <AuthField
@@ -77,6 +124,7 @@ export default function Register() {
             onChange={handleChange}
             placeholder="Parker"
             autoComplete="family-name"
+            error={fieldErrors.last_name}
           />
         </div>
 
@@ -87,6 +135,7 @@ export default function Register() {
           onChange={handleChange}
           placeholder="Acme Inc"
           autoComplete="organization"
+          error={fieldErrors.company_name}
           required
         />
 
@@ -98,6 +147,7 @@ export default function Register() {
           onChange={handleChange}
           placeholder="name@example.com"
           autoComplete="email"
+          error={fieldErrors.email}
           required
         />
 
@@ -107,10 +157,23 @@ export default function Register() {
           name="password"
           value={form.password}
           onChange={handleChange}
-          placeholder="8+ characters required"
+          placeholder="8+ characters"
           autoComplete="new-password"
+          error={fieldErrors.password}
           required
-          minLength={8}
+        />
+        <PasswordStrength password={form.password} />
+
+        <AuthField
+          label="Confirm password"
+          type="password"
+          name="confirm_password"
+          value={form.confirm_password}
+          onChange={handleChange}
+          placeholder="Re-enter your password"
+          autoComplete="new-password"
+          error={fieldErrors.confirm_password}
+          required
         />
 
         <label className="mb-6 mt-1 flex items-center gap-2 text-sm text-txt-muted">
@@ -129,7 +192,10 @@ export default function Register() {
         </label>
 
         {error && (
-          <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400" role="alert">
+          <p
+            className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400"
+            role="alert"
+          >
             {error}
           </p>
         )}
@@ -139,7 +205,7 @@ export default function Register() {
           disabled={loading}
           className="w-full rounded-lg bg-accentblue py-2.5 text-sm font-medium text-white transition-colors hover:bg-accentblue-hover disabled:opacity-60"
         >
-          {loading ? "Signing up…" : "Sign up"}
+          {loading ? "Creating account…" : "Create account"}
         </button>
       </form>
     </AuthShell>
