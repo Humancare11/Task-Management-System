@@ -47,7 +47,7 @@ const { setAutoStart, isAutoStartEnabled, launchedHidden } = require("./autostar
 const logger = require("./utils/logger");
 
 const DEFAULT_API_BASE_URL =
-  "https://tms-production-5c78.up.railway.app/api";
+  "https://task-management-system-production-fc7b.up.railway.app/api";
 
 let mainWindow = null;
 let tray = null;
