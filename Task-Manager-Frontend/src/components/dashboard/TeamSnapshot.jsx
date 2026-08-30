@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Users } from "lucide-react";
-import SectionCard from "../ui/SectionCard.jsx";
-import EmptyState from "../common/EmptyState.jsx";
 import Avatar from "../ui/Avatar.jsx";
 import Badge from "../ui/Badge.jsx";
 import api from "../../api/client.js";
@@ -41,61 +39,67 @@ export default function TeamSnapshot() {
   const remaining = members.length - preview.length;
 
   return (
-    <SectionCard
-      title="Team"
-      actions={
+    <section className="flex flex-col rounded-xl border-[0.5px] border-hair bg-surface-1">
+      <div className="flex items-center justify-between px-4 py-3">
+        <h2 className="text-sm font-semibold text-txt-primary">Team</h2>
         <Link
           to="/members"
-          className="text-xs font-medium text-primary-600 hover:text-primary-700"
+          className="text-[11px] font-medium text-accentblue hover:text-accentblue-icon"
         >
           View all
         </Link>
-      }
-    >
-      {loading && (
-        <p className="py-6 text-center text-sm text-slate-500">Loading team...</p>
-      )}
+      </div>
 
-      {!loading && error && (
-        <p className="py-6 text-center text-sm text-red-600">{error}</p>
-      )}
+      <div className="flex-1 border-t-[0.5px] border-hair px-4 py-2">
+        {loading && (
+          <p className="py-6 text-center text-sm text-txt-muted">Loading team...</p>
+        )}
 
-      {!loading && !error && members.length === 0 && (
-        <EmptyState
-          icon={Users}
-          title="No team members yet."
-          description="Members you invite will appear here."
-        />
-      )}
+        {!loading && error && (
+          <p className="py-6 text-center text-sm text-red-400">{error}</p>
+        )}
 
-      {!loading && !error && members.length > 0 && (
-        <ul className="divide-y divide-slate-100">
-          {preview.map((member) => (
-            <li
-              key={member.id}
-              className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar
-                  firstName={member.first_name}
-                  lastName={member.last_name}
-                  avatarUrl={member.avatar_url}
-                  size="sm"
-                />
-                <span className="truncate text-sm font-medium text-ink">
-                  {member.first_name} {member.last_name}
-                </span>
-              </div>
-              <Badge role={member.role} />
-            </li>
-          ))}
-          {remaining > 0 && (
-            <li className="pt-3 text-xs text-slate-400">
-              +{remaining} more member{remaining === 1 ? "" : "s"}
-            </li>
-          )}
-        </ul>
-      )}
-    </SectionCard>
+        {!loading && !error && members.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-2 text-txt-muted">
+              <Users size={18} />
+            </span>
+            <p className="text-sm text-txt-muted">No team members yet</p>
+          </div>
+        )}
+
+        {!loading && !error && members.length > 0 && (
+          <ul className="divide-y divide-hair">
+            {preview.map((member) => (
+              <li
+                key={member.id}
+                className="flex items-center justify-between gap-3 py-2.5"
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  </span>
+                  <Avatar
+                    firstName={member.first_name}
+                    lastName={member.last_name}
+                    avatarUrl={member.avatar_url}
+                    size="sm"
+                  />
+                  <span className="truncate text-sm font-medium text-txt-primary">
+                    {member.first_name} {member.last_name}
+                  </span>
+                </div>
+                <Badge role={member.role} />
+              </li>
+            ))}
+            {remaining > 0 && (
+              <li className="pt-2.5 text-xs text-txt-muted">
+                +{remaining} more member{remaining === 1 ? "" : "s"}
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }

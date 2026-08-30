@@ -31,6 +31,13 @@ function initSocket(server) {
     // Personal room — used for direct notifications
     socket.join(`user:${socket.user.id}`);
 
+    // Organization room — used for the org-wide activity feed. The id comes
+    // from the verified JWT (socket.user), never from a client message, so a
+    // client cannot subscribe to another organization's activity.
+    if (socket.user.organization_id) {
+      socket.join(`organization:${socket.user.organization_id}`);
+    }
+
     socket.on("project:join", async (projectId) => {
       try {
         const project = await Project.findOne({

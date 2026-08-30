@@ -2,8 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   TMS theme tokens — consumed via Tailwind color names that map
+   to these CSS variables (see tailwind.config.js).
+   :root = light theme, :root.dark = dark theme.
+   ============================================================ */
+:root {
+  --page: #ffffff;
+  --rail: #f3f4f6;
+  --surface-1: #ffffff;
+  --surface-2: #f6f7f9;
+  --surface-3: #fcfcfd;
+  --hair: #e5e7eb;
+  --txt-primary: #1f2430;
+  --txt-muted: #6b7280;
+  --ring: #4f8ef7;
+  color-scheme: light;
+}
+
+:root.dark {
+  --page: #0f1117;
+  --rail: #151923;
+  --surface-1: #161a24;
+  --surface-2: #1c2029;
+  --surface-3: #232937;
+  --hair: #272d3a;
+  --txt-primary: #e5e7eb;
+  --txt-muted: #8b90a0;
+  --ring: #4f8ef7;
+  color-scheme: dark;
+}
+
 body {
-  @apply bg-bg text-ink font-body antialiased;
+  background-color: var(--page);
+  color: var(--txt-primary);
+  @apply font-body antialiased;
 }
 
 h1, h2, h3, h4 {
@@ -12,7 +45,7 @@ h1, h2, h3, h4 {
 
 /* Visible keyboard focus everywhere — non-negotiable for real software */
 :focus-visible {
-  outline: 2px solid #0EA5A4;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 

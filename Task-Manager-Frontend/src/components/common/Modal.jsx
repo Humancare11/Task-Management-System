@@ -22,15 +22,15 @@ export default function Modal({ open, onClose, title, children, footer, size = "
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
-        className={`relative w-full ${sizes[size] ?? sizes.md} rounded-xl bg-white p-6 shadow-xl`}
+        className={`relative w-full ${sizes[size] ?? sizes.md} rounded-xl border border-hair bg-surface-1 p-6 shadow-xl`}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
+          <h2 className="font-display text-base font-semibold text-txt-primary">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
             aria-label="Close"
           >
             <X size={18} />

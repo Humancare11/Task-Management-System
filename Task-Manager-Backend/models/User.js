@@ -39,6 +39,21 @@ const User = sequelize.define(
       allowNull: true,
     },
 
+    job_title: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
+    },
+
+    department: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
+    },
+
+    bio: {
+      type: DataTypes.STRING(1000),
+      allowNull: true,
+    },
+
     email_verified_at: {
       type: DataTypes.DATE,
       allowNull: true,

@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const { Attachment, Task, Subtask, Comment, Project, User } = require("../models");
+const { createActivity } = require("../utils/activity");
 
 async function resolveContext(req) {
   const { projectId, taskId, subtaskId, commentId } = req.params;
@@ -95,7 +96,7 @@ exports.uploadAttachment = async (req, res) => {
     }
 
     const { taskId } = req.params;
-    const { error, subtask, comment } = await resolveContext(req);
+    const { error, project, task, subtask, comment } = await resolveContext(req);
     if (error) return res.status(error.status).json({ message: error.message });
 
     const attachment = await Attachment.create({
@@ -109,6 +110,27 @@ exports.uploadAttachment = async (req, res) => {
   file_size: req.file.size,
   mime_type: req.file.mimetype,
 });
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      user_id: req.user.id,
+      entity_type: "attachment",
+      action: "created",
+      entity_id: attachment.id,
+      project_id: project.id,
+      task_id: task.id,
+      description: `Uploaded attachment "${attachment.file_name}"`,
+      metadata: {
+        attachment_id: attachment.id,
+        file_name: attachment.file_name,
+        file_size: attachment.file_size,
+        mime_type: attachment.mime_type,
+        project_id: project.id,
+        task_id: task.id,
+        subtask_id: subtask ? subtask.id : null,
+        comment_id: comment ? comment.id : null,
+      },
+    });
 
     return res.status(201).json({
       message: "File uploaded successfully.",
@@ -169,7 +191,7 @@ exports.getAttachments = async (req, res) => {
 exports.deleteAttachment = async (req, res) => {
   try {
     const { taskId, attachmentId } = req.params;
-    const { error, subtask, comment } = await resolveContext(req);
+    const { error, project, task, subtask, comment } = await resolveContext(req);
     if (error) return res.status(error.status).json({ message: error.message });
 
     const attachment = await Attachment.findOne({
@@ -196,7 +218,31 @@ exports.deleteAttachment = async (req, res) => {
       fs.unlinkSync(filePath);
     }
 
+    const deletedAttachmentId = attachment.id;
+    const deletedAttachmentName = attachment.file_name;
+    const deletedSubtaskId = attachment.subtask_id;
+    const deletedCommentId = attachment.comment_id;
+
     await attachment.destroy();
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      user_id: req.user.id,
+      entity_type: "attachment",
+      action: "deleted",
+      entity_id: deletedAttachmentId,
+      project_id: project.id,
+      task_id: task.id,
+      description: `Deleted attachment "${deletedAttachmentName}"`,
+      metadata: {
+        attachment_id: deletedAttachmentId,
+        file_name: deletedAttachmentName,
+        project_id: project.id,
+        task_id: task.id,
+        subtask_id: deletedSubtaskId,
+        comment_id: deletedCommentId,
+      },
+    });
 
     return res.json({ message: "Attachment deleted." });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Calendar,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -40,7 +41,7 @@ const CATEGORY_OPTIONS = [
 const PAGE_SIZE = 10;
 
 const selectClass =
-  "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
 
 function formatDate(value) {
   if (!value) return "--";
@@ -53,13 +54,13 @@ function formatDate(value) {
 
 function StatCard({ icon: Icon, tone, value, label }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5">
+    <div className="flex items-center gap-4 rounded-xl border border-hair bg-surface-1 p-5">
       <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone}`}>
         <Icon size={20} />
       </div>
       <div>
-        <p className="text-2xl font-display font-bold text-ink">{value}</p>
-        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-2xl font-display font-bold text-txt-primary">{value}</p>
+        <p className="text-xs text-txt-muted">{label}</p>
       </div>
     </div>
   );
@@ -150,10 +151,10 @@ export default function Questions() {
         {!loading && !error && (
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard icon={Layers} tone="bg-primary-50 text-primary-600" value={stats.total} label="Total Questions" />
-              <StatCard icon={Circle} tone="bg-sky-50 text-sky-600" value={stats.open} label="Open" />
-              <StatCard icon={CheckCircle2} tone="bg-emerald-50 text-emerald-600" value={stats.resolved} label="Resolved" />
-              <StatCard icon={AlertTriangle} tone="bg-amber-50 text-amber-600" value={stats.highPriority} label="High Priority" />
+              <StatCard icon={Layers} tone="bg-accentblue-soft text-accentblue" value={stats.total} label="Total Questions" />
+              <StatCard icon={Circle} tone="bg-sky-500/15 text-sky-600 dark:text-sky-300" value={stats.open} label="Open" />
+              <StatCard icon={CheckCircle2} tone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" value={stats.resolved} label="Resolved" />
+              <StatCard icon={AlertTriangle} tone="bg-amber-500/15 text-amber-600 dark:text-amber-300" value={stats.highPriority} label="High Priority" />
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -204,8 +205,12 @@ export default function Questions() {
             {filteredQuestions.length === 0 ? (
               <EmptyState
                 icon={HelpCircle}
-                title="No questions found"
-                description="Try adjusting your filters, or ask a new question."
+                title={questions.length === 0 ? "No questions yet" : "No questions found"}
+                description={
+                  questions.length === 0
+                    ? "Ask your first question to get help from your team."
+                    : "Try adjusting your filters, or ask a new question."
+                }
                 action={
                   canCreateQuestion(user) && (
                     <Button icon={Plus} onClick={() => setIsSidePanelOpen(true)}>
@@ -215,27 +220,27 @@ export default function Questions() {
                 }
               />
             ) : (
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="overflow-hidden rounded-xl border border-hair bg-surface-1">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
-                    <thead className="border-b border-slate-200 bg-slate-50">
+                    <thead className="border-b border-hair bg-surface-2">
                       <tr>
-                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Question ID</th>
-                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Title</th>
-                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Category</th>
-                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Priority</th>
-                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Created</th>
-                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
-                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">Question ID</th>
+                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">Title</th>
+                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">Category</th>
+                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">Priority</th>
+                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">Created</th>
+                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">Status</th>
+                        <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">
                           <span className="sr-only">Actions</span>
                         </th>
                       </tr>
                     </thead>
 
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-hair">
                       {pagedQuestions.map((question) => (
-                        <tr key={question.id} className="hover:bg-slate-50">
-                          <td className="px-6 py-4 text-sm font-medium text-primary-600">
+                        <tr key={question.id} className="hover:bg-surface-2">
+                          <td className="px-6 py-4 text-sm font-medium text-accentblue">
                             <Link to={`/questions/${question.id}`}>
                               #Q-{String(question.id).padStart(4, "0")}
                             </Link>
@@ -243,21 +248,24 @@ export default function Questions() {
                           <td className="px-6 py-4">
                             <Link
                               to={`/questions/${question.id}`}
-                              className="text-sm font-medium text-ink hover:text-primary-600"
+                              className="text-sm font-medium text-txt-primary hover:text-accentblue"
                             >
                               {question.title}
                             </Link>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-slate-500">
+                            <span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium capitalize text-txt-muted">
                               {question.category?.replace("_", " ")}
                             </span>
                           </td>
                           <td className="px-6 py-4">
                             <QuestionPriorityBadge priority={question.priority} />
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-600">
-                            {formatDate(question.created_at)}
+                          <td className="px-6 py-4 text-sm text-txt-muted">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Calendar size={13} className="text-txt-muted" />
+                              {formatDate(question.created_at)}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <QuestionStatusBadge status={question.status} />
@@ -266,7 +274,7 @@ export default function Questions() {
                             <button
                               type="button"
                               onClick={() => navigate(`/questions/${question.id}`)}
-                              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              className="rounded-md p-1.5 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
                               title="View question"
                             >
                               <Eye size={16} />
@@ -278,8 +286,8 @@ export default function Questions() {
                   </table>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3">
-                  <p className="text-xs text-slate-500">
+                <div className="flex items-center justify-between border-t border-hair px-6 py-3">
+                  <p className="text-xs text-txt-muted">
                     Showing {pagedQuestions.length} of {filteredQuestions.length} questions
                   </p>
                   {totalPages > 1 && (
@@ -288,7 +296,7 @@ export default function Questions() {
                         type="button"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                        className="rounded-md p-1.5 text-txt-muted hover:bg-surface-2 disabled:opacity-30"
                       >
                         <ChevronLeft size={16} />
                       </button>
@@ -299,8 +307,8 @@ export default function Questions() {
                           onClick={() => setPage(n)}
                           className={`h-7 w-7 rounded-md text-xs font-medium ${
                             n === currentPage
-                              ? "bg-primary-600 text-white"
-                              : "text-slate-500 hover:bg-slate-100"
+                              ? "bg-accentblue text-white"
+                              : "text-txt-muted hover:bg-surface-2"
                           }`}
                         >
                           {n}
@@ -310,7 +318,7 @@ export default function Questions() {
                         type="button"
                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                        className="rounded-md p-1.5 text-txt-muted hover:bg-surface-2 disabled:opacity-30"
                       >
                         <ChevronRight size={16} />
                       </button>

@@ -8,18 +8,18 @@ export default function InvitationRow({ invitation, canManage, onResend, onCance
   const canCancel = canManage && invitation.status === "pending";
 
   return (
-    <tr className="hover:bg-slate-50">
+    <tr className="hover:bg-surface-2">
       <td className="px-6 py-4">
-        <p className="font-medium text-ink">{invitation.email}</p>
+        <p className="font-medium text-txt-primary">{invitation.email}</p>
       </td>
-      <td className="px-6 py-4 text-sm capitalize text-slate-600">{invitation.role}</td>
+      <td className="px-6 py-4 text-sm capitalize text-txt-muted">{invitation.role}</td>
       <td className="px-6 py-4">
         <InvitationStatusBadge status={invitation.status} />
       </td>
-      <td className="px-6 py-4 text-sm text-slate-600">
+      <td className="px-6 py-4 text-sm text-txt-muted">
         {new Date(invitation.created_at).toLocaleDateString()}
       </td>
-      <td className="px-6 py-4 text-sm text-slate-600">
+      <td className="px-6 py-4 text-sm text-txt-muted">
         {new Date(invitation.expires_at).toLocaleDateString()}
       </td>
       {canManage && (

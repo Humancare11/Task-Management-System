@@ -1,8 +1,10 @@
+import { BADGE_TONES } from "../ui/badgeTones.js";
+
 const STATUS_STYLES = {
-  pending: "bg-amber-50 text-amber-700",
-  accepted: "bg-emerald-50 text-emerald-700",
-  expired: "bg-slate-200 text-slate-500",
-  cancelled: "bg-red-50 text-red-600",
+  pending: BADGE_TONES.amber,
+  accepted: BADGE_TONES.emerald,
+  expired: BADGE_TONES.neutral,
+  cancelled: BADGE_TONES.red,
 };
 
 const STATUS_LABELS = {

@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { User, Organization, AuthIdentity, OrganizationMember, OrganizationInvitation } = require("../models");
 const { sequelize } = require("../config/db");
+const { createActivity } = require("../utils/activity");
 
 function generateToken({ user, organizationId, role }) {
   return jwt.sign(
@@ -292,6 +293,24 @@ exports.registerWithInvitation = async (req, res) => {
     });
 
     await transaction.commit();
+
+    // This flow is token-based and unauthenticated (no req.user). The actor is
+    // the newly created user; the organization comes from the validated invitation.
+    await createActivity({
+      organization_id: invitation.organization_id,
+      user_id: user.id,
+      entity_type: "invitation",
+      action: "updated",
+      entity_id: invitation.id,
+      project_id: null,
+      task_id: null,
+      description: `Accepted invitation`,
+      metadata: {
+        invitation_id: invitation.id,
+        invitee_email: invitation.email,
+        status: "accepted",
+      },
+    });
 
     return res.status(201).json({
       message: "Account created and invitation accepted successfully.",

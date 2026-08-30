@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "../components/AuthLayout.jsx";
-import FormField from "../components/FormField.jsx";
+import AuthShell from "../components/auth/AuthShell.jsx";
+import AuthField from "../components/auth/AuthField.jsx";
 import api, { API_BASE_URL } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -42,17 +42,14 @@ export default function Login() {
   }
 
   return (
-    <AuthLayout
+    <AuthShell
       title="Sign in"
-      subtitle="Free access to our dashboard."
+      subtitle="Welcome back — sign in to your workspace."
       footer={
         <>
           Don&apos;t have an account yet?{" "}
-          <Link
-            to="/register"
-            className="text-white font-medium hover:underline"
-          >
-            Sign up here
+          <Link to="/register" className="font-medium text-accentblue hover:underline">
+            Sign up
           </Link>
         </>
       }
@@ -60,82 +57,66 @@ export default function Login() {
       <button
         type="button"
         onClick={handleGoogleLogin}
-        className="w-full flex items-center justify-center gap-2 rounded-lg bg-white text-black font-medium py-2.5 mb-6 hover:bg-white/90 transition-colors"
+        className="mb-5 flex w-full items-center justify-center gap-2 rounded-lg border border-hair bg-surface-2 py-2.5 text-sm font-medium text-txt-primary transition-colors hover:bg-surface-1"
       >
-        <svg width="18" height="18" viewBox="0 0 18 18">
-          <path
-            fill="#4285F4"
-            d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.56 2.7-3.87 2.7-6.62z"
-          />
-          <path
-            fill="#34A853"
-            d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z"
-          />
-          <path
-            fill="#FBBC05"
-            d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.03l2.99-2.33z"
-          />
-          <path
-            fill="#EA4335"
-            d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z"
-          />
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+          <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.56 2.7-3.87 2.7-6.62z" />
+          <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.96v2.33A9 9 0 0 0 9 18z" />
+          <path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.03l2.99-2.33z" />
+          <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.97l2.99 2.33C4.66 5.17 6.65 3.58 9 3.58z" />
         </svg>
         Sign in with Google
       </button>
 
-      <div className="flex items-center gap-4 mb-6">
-        <div className="h-px flex-1 bg-white/15" />
-        <span className="text-xs text-white/50">OR</span>
-        <div className="h-px flex-1 bg-white/15" />
+      <div className="mb-5 flex items-center gap-4">
+        <div className="h-px flex-1 bg-hair" />
+        <span className="text-xs text-txt-muted">OR</span>
+        <div className="h-px flex-1 bg-hair" />
       </div>
 
       <form onSubmit={handleSubmit}>
-        <FormField
+        <AuthField
           label="Email address"
           type="email"
           name="email"
           value={form.email}
           onChange={handleChange}
           placeholder="name@example.com"
+          autoComplete="email"
           required
         />
 
-        <div className="mb-2">
-          <div className="flex items-center justify-between mb-1.5">
-            <label htmlFor="password" className="text-sm text-white/80">
-              Password
-            </label>
+        <AuthField
+          label="Password"
+          type="password"
+          name="password"
+          value={form.password}
+          onChange={handleChange}
+          placeholder="Enter your password"
+          autoComplete="current-password"
+          required
+          labelRight={
             <Link
               to="/forgot-password"
-              className="text-sm text-white/80 hover:underline"
+              className="text-xs font-medium text-txt-muted hover:text-accentblue"
             >
-              Forgot Password?
+              Forgot password?
             </Link>
-          </div>
-          <input
-            id="password"
-            type="password"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            placeholder="••••••••••••••"
-            required
-            className="w-full rounded-lg bg-white/10 border border-white/10 text-white placeholder-white/40 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/40 focus:bg-white/[0.15] transition-colors"
-          />
-        </div>
+          }
+        />
 
-        <label className="flex items-center gap-2 text-sm text-white/70 mb-6 mt-3">
+        <label className="mb-6 mt-1 flex items-center gap-2 text-sm text-txt-muted">
           <input
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="w-4 h-4 rounded border-white/30 bg-white/10 accent-white"
+            className="h-4 w-4 rounded border-hair accent-accentblue"
           />
           Remember me
         </label>
 
         {error && (
-          <p className="text-sm text-red-400 mb-4" role="alert">
+          <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400" role="alert">
             {error}
           </p>
         )}
@@ -143,11 +124,11 @@ export default function Login() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-white text-black font-medium py-2.5 hover:bg-white/90 transition-colors disabled:opacity-60"
+          className="w-full rounded-lg bg-accentblue py-2.5 text-sm font-medium text-white transition-colors hover:bg-accentblue-hover disabled:opacity-60"
         >
           {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
-    </AuthLayout>
+    </AuthShell>
   );
 }

@@ -57,19 +57,9 @@ import {
   canDeleteComment,
 } from "../../config/permissions.js";
 import { API_ORIGIN } from "../../api/client.js";
+import TaskActivityTab from "../../components/tasks/TaskActivityTab.jsx";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-
-function formatDateTime(value) {
-  if (!value) return "--";
-  return new Date(value).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function formatDate(value) {
   if (!value) return "--";
@@ -119,7 +109,7 @@ function renderCommentContent(content, members = []) {
       return (
         <span
           key={index}
-          className="inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-xs font-semibold text-sky-700 mx-0.5 hover:bg-sky-100 transition cursor-default"
+          className="inline-flex items-center rounded bg-accentblue-soft px-1.5 py-0.5 text-xs font-semibold text-accentblue mx-0.5 hover:bg-accentblue-soft transition cursor-default"
         >
           @{displayName}
         </span>
@@ -603,7 +593,6 @@ export default function TaskDetails() {
   // ─── derived values ───────────────────────────────────────────────────────
 
   const tags = Array.isArray(task?.tags) ? task.tags : [];
-  const activity = Array.isArray(task?.activity) ? task.activity : [];
 
   const completedSubtasks = useMemo(
     () => subtasks.filter((s) => s.status === "completed").length,
@@ -645,19 +634,19 @@ export default function TaskDetails() {
 
   return (
     <AppLayout title="Task Details">
-      <div className="min-h-full bg-slate-50">
+      <div className="min-h-full bg-page">
         <div className="space-y-5">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm">
             <Link
               to={`/projects/${projectId}`}
-              className="inline-flex items-center gap-2 text-slate-500 transition hover:text-slate-900"
+              className="inline-flex items-center gap-2 text-txt-muted transition hover:text-txt-primary"
             >
               <ArrowLeft size={15} />
               Tasks
             </Link>
-            <span className="text-slate-300">›</span>
-            <span className="text-slate-700">Task Details</span>
+            <span className="text-txt-muted">›</span>
+            <span className="text-txt-primary">Task Details</span>
           </div>
 
           {/* Main Layout */}
@@ -665,9 +654,9 @@ export default function TaskDetails() {
             {/* ── LEFT ── */}
             <div className="space-y-4">
               {/* Task Main Card */}
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="rounded-2xl border border-hair bg-surface-1 shadow-sm">
                 {/* Header */}
-                <div className="border-b border-slate-200 px-5 py-5">
+                <div className="border-b border-hair px-5 py-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="mb-3">
@@ -675,7 +664,7 @@ export default function TaskDetails() {
                           <select
                             value={task.status}
                             onChange={handleStatusChange}
-                            className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-600 outline-none focus:border-sky-400"
+                            className="rounded-full border border-hair bg-surface-2 px-3 py-1 text-xs font-semibold text-txt-primary outline-none focus:border-accentblue"
                           >
                             <option value="todo">To Do</option>
                             <option value="in_progress">In Progress</option>
@@ -687,11 +676,11 @@ export default function TaskDetails() {
                         )}
                       </div>
 
-                      <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                      <h1 className="text-xl font-semibold tracking-tight text-txt-primary">
                         {task.title}
                       </h1>
 
-                      <div className="mt-1 text-sm text-slate-500">
+                      <div className="mt-1 text-sm text-txt-muted">
                         {task.project?.name || task.project_name || "Project"} ·
                         Created {formatDate(task.created_at)}
                       </div>
@@ -703,7 +692,7 @@ export default function TaskDetails() {
                         <button
                           type="button"
                           onClick={() => setEditOpen(true)}
-                          className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                          className="rounded-lg p-2 text-txt-muted transition hover:bg-surface-2 hover:text-txt-primary"
                           title="Edit task"
                         >
                           <Pencil size={17} />
@@ -711,14 +700,14 @@ export default function TaskDetails() {
                       )}
                       <button
                         type="button"
-                        className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                        className="rounded-lg p-2 text-txt-muted transition hover:bg-surface-2 hover:text-txt-primary"
                         title="Share task"
                       >
                         <Share2 size={17} />
                       </button>
                       <button
                         type="button"
-                        className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                        className="rounded-lg p-2 text-txt-muted transition hover:bg-surface-2 hover:text-txt-primary"
                         title="More options"
                       >
                         <MoreVertical size={17} />
@@ -731,10 +720,10 @@ export default function TaskDetails() {
                 <div className="px-5 py-5">
                   {/* Header */}
                   <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-slate-900">
+                    <h2 className="text-sm font-semibold text-txt-primary">
                       Attachments
                       {attachments.length > 0 && (
-                        <span className="ml-1.5 text-slate-400">
+                        <span className="ml-1.5 text-txt-muted">
                           ({attachments.length})
                         </span>
                       )}
@@ -744,7 +733,7 @@ export default function TaskDetails() {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={attachmentUploading}
-                        className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-40"
+                        className="flex items-center gap-1 text-xs font-medium text-accentblue hover:text-accentblue disabled:opacity-40"
                       >
                         <Upload size={13} />
                         {attachmentUploading ? "Uploading…" : "Upload"}
@@ -767,17 +756,17 @@ export default function TaskDetails() {
                       {attachments.map((file) => (
                         <div
                           key={file.id}
-                          className="group flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3 transition hover:border-slate-300 hover:bg-slate-50"
+                          className="group flex items-center justify-between rounded-xl border border-hair px-3 py-3 transition hover:border-hair hover:bg-surface-2"
                         >
                           <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-                              <Paperclip size={17} className="text-slate-500" />
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-2">
+                              <Paperclip size={17} className="text-txt-muted" />
                             </div>
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-slate-800">
+                              <p className="truncate text-sm font-medium text-txt-primary">
                                 {file.file_name}
                               </p>
-                              <p className="text-xs text-slate-400">
+                              <p className="text-xs text-txt-muted">
                                 {formatFileSize(file.file_size)}
                               </p>
                             </div>
@@ -787,7 +776,7 @@ export default function TaskDetails() {
                               href={`${API_ORIGIN}${file.url}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              className="rounded-md p-1.5 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
                               title="Download"
                             >
                               <Download size={15} />
@@ -796,7 +785,7 @@ export default function TaskDetails() {
                               <button
                                 type="button"
                                 onClick={() => setAttachmentToDelete(file)}
-                                className="hidden rounded-md p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500 group-hover:block"
+                                className="hidden rounded-md p-1.5 text-txt-muted hover:bg-red-500/10 hover:text-red-500 group-hover:block"
                                 title="Delete"
                               >
                                 <Trash2 size={15} />
@@ -819,20 +808,20 @@ export default function TaskDetails() {
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current?.click()}
                       className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${dragOver
-                          ? "border-sky-400 bg-sky-50"
-                          : "border-slate-200 hover:border-slate-300"
+                          ? "border-accentblue bg-accentblue-soft"
+                          : "border-hair hover:border-hair"
                         }`}
                     >
                       <Upload
                         size={18}
-                        className={`mx-auto mb-1 ${dragOver ? "text-sky-400" : "text-slate-300"}`}
+                        className={`mx-auto mb-1 ${dragOver ? "text-accentblue" : "text-txt-muted"}`}
                       />
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-txt-muted">
                         {attachmentUploading
                           ? "Uploading…"
                           : "Drop a file here or click to upload"}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-300">
+                      <p className="mt-0.5 text-xs text-txt-muted">
                         PNG, JPG, PDF, DOC, XLS up to 10MB
                       </p>
                     </div>
@@ -840,31 +829,31 @@ export default function TaskDetails() {
 
                   {/* Empty state for non-managers */}
                   {!canManage && attachments.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-center">
+                    <div className="rounded-xl border border-dashed border-hair px-4 py-4 text-center">
                       <Paperclip
                         size={18}
-                        className="mx-auto mb-1 text-slate-300"
+                        className="mx-auto mb-1 text-txt-muted"
                       />
-                      <p className="text-xs text-slate-400">No attachments</p>
+                      <p className="text-xs text-txt-muted">No attachments</p>
                     </div>
                   )}
                 </div>
 
                 {/* Description */}
-                <div className="border-t border-slate-200 px-5 py-5">
-                  <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                <div className="border-t border-hair px-5 py-5">
+                  <h2 className="mb-2 text-sm font-semibold text-txt-primary">
                     Description
                   </h2>
-                  <p className="whitespace-pre-line text-sm leading-6 text-slate-600">
+                  <p className="whitespace-pre-line text-sm leading-6 text-txt-muted">
                     {task.description || "No description provided."}
                   </p>
                 </div>
               </div>
 
               {/* ── Subtasks / Comments / Activity card ── */}
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="rounded-2xl border border-hair bg-surface-1 shadow-sm">
                 {/* Tabs */}
-                <div className="border-b border-slate-200 px-5 pt-4">
+                <div className="border-b border-hair px-5 pt-4">
                   <div className="flex items-center gap-6">
                     {[
                       ["subtasks", "Subtasks"],
@@ -876,18 +865,18 @@ export default function TaskDetails() {
                         type="button"
                         onClick={() => setActiveTab(key)}
                         className={`relative pb-3 text-sm font-medium transition ${activeTab === key
-                            ? "text-sky-600"
-                            : "text-slate-500 hover:text-slate-800"
+                            ? "text-accentblue"
+                            : "text-txt-muted hover:text-txt-primary"
                           }`}
                       >
                         {label}
                         {key === "subtasks" && subtasks.length > 0 && (
-                          <span className="ml-1.5 text-xs text-slate-400">
+                          <span className="ml-1.5 text-xs text-txt-muted">
                             ({subtasks.length})
                           </span>
                         )}
                         {activeTab === key && (
-                          <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-sky-500" />
+                          <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-accentblue" />
                         )}
                       </button>
                     ))}
@@ -902,11 +891,11 @@ export default function TaskDetails() {
                         {/* Header row */}
                         <div className="mb-4 flex items-center justify-between">
                           <div>
-                            <h3 className="text-sm font-semibold text-slate-900">
+                            <h3 className="text-sm font-semibold text-txt-primary">
                               Task Subtasks
                             </h3>
 
-                            <span className="text-xs text-slate-500">
+                            <span className="text-xs text-txt-muted">
                               {completedSubtasks} / {subtasks.length} completed
                             </span>
                           </div>
@@ -926,9 +915,9 @@ export default function TaskDetails() {
                         </div>
 
                         {/* Progress bar */}
-                        <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-surface-2">
                           <div
-                            className="h-full rounded-full bg-sky-500 transition-all duration-300"
+                            className="h-full rounded-full bg-accentblue transition-all duration-300"
                             style={{ width: `${calculatedProgress}%` }}
                           />
                         </div>
@@ -938,7 +927,7 @@ export default function TaskDetails() {
                     {/* Subtask list */}
                     {subtasks.length === 0 && (
                       <div className="py-6 text-center">
-                        <p className="text-sm text-slate-400">
+                        <p className="text-sm text-txt-muted">
                           No subtasks yet.
                         </p>
                       </div>
@@ -970,10 +959,10 @@ export default function TaskDetails() {
                             <div
                               className={`group flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${
                                 isUpdating || isDeleting
-                                  ? "border-slate-100 opacity-60"
+                                  ? "border-hair opacity-60"
                                   : isDueSoon
-                                    ? "border-amber-200 bg-amber-50"
-                                    : "border-slate-100 hover:border-slate-200 hover:bg-slate-50"
+                                    ? "border-amber-500/30 bg-amber-500/10"
+                                    : "border-hair bg-surface-2 hover:border-hair hover:bg-surface-3"
                                 }`}
                             >
                               {/* Left: checkbox + text */}
@@ -996,10 +985,10 @@ export default function TaskDetails() {
                                 {/* Checkbox */}
                                 <div
                                   className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${completed
-                                      ? "border-sky-500 bg-sky-500"
+                                      ? "border-accentblue bg-accentblue"
                                       : subtask.status === "in_progress"
-                                        ? "border-blue-400 bg-blue-50"
-                                        : "border-slate-300 bg-white"
+                                        ? "border-blue-400 bg-blue-500/15"
+                                        : "border-hair bg-surface-1"
                                     }`}
                                 >
                                   {completed && (
@@ -1018,21 +1007,21 @@ export default function TaskDetails() {
                                   <div className="flex items-center gap-1.5">
                                     <p
                                       className={`text-sm ${completed
-                                          ? "text-slate-400 line-through"
-                                          : "text-slate-700"
+                                          ? "text-txt-muted line-through"
+                                          : "text-txt-primary"
                                         }`}
                                     >
                                       {subtask.title}
                                     </p>
                                     {/* Due-soon pill — visible to everyone */}
                                     {isDueSoon && (
-                                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-600">
+                                      <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                                         Due soon
                                       </span>
                                     )}
                                   </div>
                                   {subtask.description && (
-                                    <p className="mt-0.5 truncate text-xs text-slate-400">
+                                    <p className="mt-0.5 truncate text-xs text-txt-muted">
                                       {subtask.description}
                                     </p>
                                   )}
@@ -1042,7 +1031,7 @@ export default function TaskDetails() {
                                         {subtask.tags.map((tag) => (
                                           <span
                                             key={tag.id}
-                                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500"
+                                            className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-txt-muted"
                                           >
                                             {tag.name}
                                           </span>
@@ -1068,17 +1057,17 @@ export default function TaskDetails() {
 
                                 {/* Unassigned warning — nudges owner to assign someone */}
                                 {canManage && !subtask.assignee && (
-                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-400">
+                                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-txt-muted">
                                     Unassigned
                                   </span>
                                 )}
 
                                 <span
                                   className={`rounded-full px-2 py-1 text-xs font-medium ${completed
-                                      ? "bg-green-50 text-green-600"
+                                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
                                       : subtask.status === "in_progress"
-                                        ? "bg-blue-50 text-blue-600"
-                                        : "bg-slate-100 text-slate-500"
+                                        ? "bg-blue-500/15 text-blue-700 dark:text-blue-300"
+                                        : "bg-surface-2 text-txt-muted"
                                     }`}
                                 >
                                   {completed
@@ -1094,7 +1083,7 @@ export default function TaskDetails() {
                                     type="button"
                                     disabled={isDeleting}
                                     onClick={() => setSubtaskToDelete(subtask)}
-                                    className="hidden rounded p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-500 group-hover:flex"
+                                    className="hidden rounded p-1 text-txt-muted transition hover:bg-red-500/10 hover:text-red-500 group-hover:flex"
                                     title="Delete subtask"
                                   >
                                     <Trash2 size={13} />
@@ -1109,7 +1098,7 @@ export default function TaskDetails() {
                                       prev === subtask.id ? null : subtask.id,
                                     )
                                   }
-                                  className="rounded p-1 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600"
+                                  className="rounded p-1 text-txt-muted transition hover:bg-surface-2 hover:text-txt-primary"
                                   title={
                                     isExpanded
                                       ? "Hide comments & attachments"
@@ -1148,7 +1137,7 @@ export default function TaskDetails() {
                           setEditingSubtask(null);
                           setSubtaskModalOpen(true);
                         }}
-                        className="mt-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400 transition hover:border-slate-300 hover:text-slate-600"
+                        className="mt-3 flex w-full items-center gap-2 rounded-lg border border-dashed border-hair px-3 py-2.5 text-sm text-txt-muted transition hover:border-hair hover:text-txt-primary"
                       >
                         <Plus size={14} />
                         Add subtask
@@ -1163,7 +1152,7 @@ export default function TaskDetails() {
                     {/* Comment list */}
                     <div className="space-y-5 px-5 py-5">
                       {comments.length === 0 && (
-                        <p className="text-center text-sm text-slate-400">
+                        <p className="text-center text-sm text-txt-muted">
                           No comments yet. Be the first to comment.
                         </p>
                       )}
@@ -1186,10 +1175,10 @@ export default function TaskDetails() {
                             {/* Body */}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-slate-800">
+                                <span className="text-sm font-semibold text-txt-primary">
                                   {getUserName(comment.author)}
                                 </span>
-                                <span className="text-xs text-slate-400">
+                                <span className="text-xs text-txt-muted">
                                   {timeAgo(comment.created_at)}
                                 </span>
 
@@ -1198,7 +1187,7 @@ export default function TaskDetails() {
                                   <button
                                     type="button"
                                     onClick={() => setCommentToDelete(comment)}
-                                    className="ml-auto hidden rounded p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-500 group-hover:block"
+                                    className="ml-auto hidden rounded p-1 text-txt-muted transition hover:bg-red-500/10 hover:text-red-500 group-hover:block"
                                     title="Delete comment"
                                   >
                                     <Trash2 size={13} />
@@ -1206,7 +1195,7 @@ export default function TaskDetails() {
                                 )}
                               </div>
 
-                              <p className="mt-0.5 text-sm leading-6 text-slate-600">
+                              <p className="mt-0.5 text-sm leading-6 text-txt-muted">
                                 {renderCommentContent(comment.content, members)}
                               </p>
 
@@ -1218,13 +1207,13 @@ export default function TaskDetails() {
                                       href={`${API_ORIGIN}${file.url}`}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                                      className="flex w-fit items-center gap-2 rounded-lg border border-hair bg-surface-2 px-2.5 py-1.5 text-xs text-txt-muted transition hover:border-accentblue hover:bg-accentblue-soft hover:text-accentblue"
                                     >
-                                      <Paperclip size={13} className="shrink-0 text-slate-400" />
+                                      <Paperclip size={13} className="shrink-0 text-txt-muted" />
                                       <span className="max-w-[200px] truncate">
                                         {file.file_name}
                                       </span>
-                                      <span className="shrink-0 text-slate-400">
+                                      <span className="shrink-0 text-txt-muted">
                                         {formatFileSize(file.file_size)}
                                       </span>
                                     </a>
@@ -1238,7 +1227,7 @@ export default function TaskDetails() {
                     </div>
 
                     {/* Composer */}
-                    <div className="border-t border-slate-100 px-5 py-4">
+                    <div className="border-t border-hair px-5 py-4">
                       <div className="flex gap-3">
                         {/* Current user avatar */}
                         <div className="shrink-0">
@@ -1250,9 +1239,9 @@ export default function TaskDetails() {
                           />
                         </div>
 
-                        <div className="relative flex-1 rounded-xl border border-slate-200 bg-white transition focus-within:border-sky-300 focus-within:ring-1 focus-within:ring-sky-100">
+                        <div className="relative flex-1 rounded-xl border border-hair bg-surface-1 transition focus-within:border-accentblue focus-within:ring-1 focus-within:ring-accentblue/30">
                           {showMentionDropdown && filteredMembers.length > 0 && (
-                            <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                            <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 overflow-y-auto rounded-lg border border-hair bg-surface-1 py-1 shadow-lg">
                               {filteredMembers.map((member, idx) => {
                                 const u = member.user;
                                 if (!u) return null;
@@ -1263,7 +1252,7 @@ export default function TaskDetails() {
                                     onClick={() => selectMentionedMember(member)}
                                     onMouseEnter={() => setActiveMentionIndex(idx)}
                                     className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition ${
-                                      isSelected ? "bg-sky-50 text-sky-900" : "text-slate-700 hover:bg-slate-50"
+                                      isSelected ? "bg-accentblue-soft text-txt-primary" : "text-txt-primary hover:bg-surface-2"
                                     }`}
                                   >
                                     <Avatar
@@ -1274,7 +1263,7 @@ export default function TaskDetails() {
                                     />
                                     <div className="min-w-0 flex-1">
                                       <p className="font-semibold truncate">{u.first_name} {u.last_name}</p>
-                                      <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                                      <p className="text-[10px] text-txt-muted truncate">{u.email}</p>
                                     </div>
                                   </div>
                                 );
@@ -1289,12 +1278,12 @@ export default function TaskDetails() {
                             placeholder="Write a comment…"
                             disabled={commentSending}
                             rows={2}
-                            className="w-full resize-none rounded-t-xl px-3 pt-3 text-sm text-slate-700 placeholder-slate-400 outline-none"
+                            className="w-full resize-none rounded-t-xl px-3 pt-3 text-sm text-txt-primary placeholder:text-txt-muted outline-none"
                           />
 
                           {commentFile && (
                             <div className="flex items-center gap-2 px-3 pb-1">
-                              <span className="flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-700">
+                              <span className="flex items-center gap-1.5 rounded-lg border border-accentblue bg-accentblue-soft px-2 py-1 text-xs text-accentblue">
                                 <Paperclip size={12} />
                                 <span className="max-w-[180px] truncate">
                                   {commentFile.name}
@@ -1302,7 +1291,7 @@ export default function TaskDetails() {
                                 <button
                                   type="button"
                                   onClick={() => setCommentFile(null)}
-                                  className="text-sky-400 hover:text-sky-700"
+                                  className="text-accentblue hover:text-accentblue"
                                   title="Remove file"
                                 >
                                   <X size={12} />
@@ -1313,7 +1302,7 @@ export default function TaskDetails() {
 
                           {/* Toolbar */}
                           <div className="flex items-center justify-between px-3 pb-2 pt-1">
-                            <div className="flex items-center gap-3 text-slate-400">
+                            <div className="flex items-center gap-3 text-txt-muted">
                               <input
                                 ref={commentFileInputRef}
                                 type="file"
@@ -1323,7 +1312,7 @@ export default function TaskDetails() {
                               <button
                                 type="button"
                                 onClick={() => commentFileInputRef.current?.click()}
-                                className="transition hover:text-slate-600"
+                                className="transition hover:text-txt-primary"
                                 title="Attach file"
                               >
                                 <Paperclip size={15} />
@@ -1331,7 +1320,7 @@ export default function TaskDetails() {
                               <button
                                 type="button"
                                 onClick={handleTriggerMention}
-                                className="transition hover:text-slate-600 flex h-5 w-5 items-center justify-center rounded hover:bg-slate-100 font-semibold text-slate-500 text-sm"
+                                className="transition hover:text-txt-primary flex h-5 w-5 items-center justify-center rounded hover:bg-surface-2 font-semibold text-txt-muted text-sm"
                                 title="Mention a user"
                               >
                                 @
@@ -1342,7 +1331,7 @@ export default function TaskDetails() {
                               type="button"
                               onClick={handleSendComment}
                               disabled={!commentText.trim() || commentSending}
-                              className="rounded-lg bg-sky-500 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-600 disabled:opacity-40"
+                              className="rounded-lg bg-accentblue px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-accentblue disabled:opacity-40"
                             >
                               {commentSending ? "Sending…" : "Send"}
                             </button>
@@ -1356,31 +1345,7 @@ export default function TaskDetails() {
                 {/* Activity tab */}
                 {activeTab === "activity" && (
                   <div className="px-5 py-6">
-                    {activity.length > 0 ? (
-                      <div className="space-y-4">
-                        {activity.map((item, index) => (
-                          <div key={item.id || index} className="flex gap-3">
-                            <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-sky-500" />
-                            <div>
-                              <p className="text-sm text-slate-700">
-                                {item.message ||
-                                  item.description ||
-                                  "Task activity"}
-                              </p>
-                              {item.created_at && (
-                                <p className="mt-1 text-xs text-slate-400">
-                                  {formatDateTime(item.created_at)}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center text-sm text-slate-400">
-                        No activity available.
-                      </p>
-                    )}
+                    <TaskActivityTab taskId={taskId} />
                   </div>
                 )}
               </div>
@@ -1388,28 +1353,28 @@ export default function TaskDetails() {
 
             {/* ── RIGHT DETAILS ── */}
             <div>
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="rounded-2xl border border-hair bg-surface-1 shadow-sm">
                 <div className="px-5 py-5">
-                  <h2 className="mb-5 text-sm font-semibold text-slate-900">
+                  <h2 className="mb-5 text-sm font-semibold text-txt-primary">
                     Details
                   </h2>
 
                   <div className="space-y-5">
                     {/* Status */}
                     <div className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-slate-500">Status</span>
+                      <span className="text-sm text-txt-muted">Status</span>
                       <TaskStatusBadge status={task.status} />
                     </div>
 
                     {/* Priority */}
                     <div className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-slate-500">Priority</span>
+                      <span className="text-sm text-txt-muted">Priority</span>
                       <TaskPriorityBadge priority={task.priority} />
                     </div>
 
                     {/* Assignee */}
                     <div className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-slate-500">Assignee</span>
+                      <span className="text-sm text-txt-muted">Assignee</span>
                       <div className="flex items-center gap-2">
                         {task.assignee ? (
                           <>
@@ -1419,12 +1384,12 @@ export default function TaskDetails() {
                               avatarUrl={task.assignee.avatar_url}
                               size="sm"
                             />
-                            <span className="max-w-[150px] truncate text-sm font-medium text-slate-700">
+                            <span className="max-w-[150px] truncate text-sm font-medium text-txt-primary">
                               {getUserName(task.assignee)}
                             </span>
                           </>
                         ) : (
-                          <span className="text-sm text-slate-400">
+                          <span className="text-sm text-txt-muted">
                             Unassigned
                           </span>
                         )}
@@ -1434,10 +1399,10 @@ export default function TaskDetails() {
                     {/* Start Date */}
                     {task.start_date && (
                       <div className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-slate-500">
+                        <span className="text-sm text-txt-muted">
                           Start Date
                         </span>
-                        <span className="text-sm font-medium text-slate-700">
+                        <span className="text-sm font-medium text-txt-primary">
                           {formatDate(task.start_date)}
                         </span>
                       </div>
@@ -1445,8 +1410,8 @@ export default function TaskDetails() {
 
                     {/* Due Date */}
                     <div className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-slate-500">Due Date</span>
-                      <span className="text-sm font-medium text-slate-700">
+                      <span className="text-sm text-txt-muted">Due Date</span>
+                      <span className="text-sm font-medium text-txt-primary">
                         {formatDate(task.due_date)}
                       </span>
                     </div>
@@ -1454,14 +1419,14 @@ export default function TaskDetails() {
                     {/* Tags */}
                     {tags.length > 0 && (
                       <div className="flex items-start justify-between gap-4">
-                        <span className="pt-1 text-sm text-slate-500">
+                        <span className="pt-1 text-sm text-txt-muted">
                           Tags
                         </span>
                         <div className="flex max-w-[200px] flex-wrap justify-end gap-1.5">
                           {tags.map((tag, index) => (
                             <span
                               key={tag.id || index}
-                              className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                              className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-txt-muted"
                             >
                               {typeof tag === "string" ? tag : tag.name}
                             </span>
@@ -1474,18 +1439,18 @@ export default function TaskDetails() {
 
                 {/* Overall progress */}
                 {calculatedProgress !== null && (
-                  <div className="border-t border-slate-200 px-5 py-5">
+                  <div className="border-t border-hair px-5 py-5">
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm text-slate-500">
+                      <span className="text-sm text-txt-muted">
                         Overall progress
                       </span>
-                      <span className="text-sm font-semibold text-slate-700">
+                      <span className="text-sm font-semibold text-txt-primary">
                         {calculatedProgress}%
                       </span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
                       <div
-                        className="h-full rounded-full bg-sky-500 transition-all duration-300"
+                        className="h-full rounded-full bg-accentblue transition-all duration-300"
                         style={{ width: `${calculatedProgress}%` }}
                       />
                     </div>
@@ -1498,7 +1463,7 @@ export default function TaskDetails() {
                     <button
                       type="button"
                       onClick={handleComplete}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-600"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-accentblue px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-accentblue"
                     >
                       <CheckCircle2 size={16} />
                       Mark Complete
@@ -1508,11 +1473,11 @@ export default function TaskDetails() {
 
                 {/* Delete task */}
                 {canDeleteTask(user) && (
-                  <div className="border-t border-slate-100 px-5 py-4">
+                  <div className="border-t border-hair px-5 py-4">
                     <button
                       type="button"
                       onClick={() => setDeleteOpen(true)}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition hover:bg-red-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-500 transition hover:bg-red-500/10"
                     >
                       <Trash2 size={15} />
                       Delete Task
@@ -1593,6 +1558,7 @@ export default function TaskDetails() {
         taskId={taskId}
         mode={editingSubtask ? "edit" : "create"}
         subtask={editingSubtask}
+        parentTaskTitle={task?.title}
         projectMembers={members}
         onSaved={fetchAll}
       />

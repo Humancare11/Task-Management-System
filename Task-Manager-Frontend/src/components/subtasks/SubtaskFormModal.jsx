@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import Modal from "../common/Modal.jsx";
+// Drawer presentation replaces the old modal while preserving the existing
+// Create/Edit Subtask form submission logic, API calls and validation.
+import Drawer from "../ui/Drawer.jsx";
 import Button from "../ui/Button.jsx";
 import { createSubtask, updateSubtask } from "../../api/subtasks.js";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -8,7 +10,9 @@ const STATUS_OPTIONS = ["todo", "in_progress", "completed"];
 const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"];
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary placeholder:text-txt-muted focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue disabled:cursor-not-allowed disabled:bg-surface-2";
+
+const labelClass = "mb-1.5 block text-sm font-medium text-txt-primary";
 
 function toDateInputValue(value) {
   if (!value) return "";
@@ -33,6 +37,7 @@ export default function SubtaskFormModal({
   mode = "create",
   subtask,
   projectMembers = [],
+  parentTaskTitle,
   onSaved,
 }) {
   const toast = useToast();
@@ -131,19 +136,27 @@ export default function SubtaskFormModal({
         onClose();
       })
       .catch((err) => {
+        // Keep the drawer (and entered data) open on failure.
         toast.error(err.response?.data?.message || "Failed to save subtask.");
+        setError(err.response?.data?.message || "Failed to save subtask.");
       })
       .finally(() => {
         setSubmitting(false);
       });
   }
 
+  const isEdit = mode === "edit";
+
   return (
-    <Modal
+    <Drawer
       open={open}
       onClose={onClose}
-      title={mode === "edit" ? "Edit Subtask" : "Create Subtask"}
-      size="lg"
+      title={isEdit ? "Edit Subtask" : "Create Subtask"}
+      description={
+        isEdit
+          ? "Update the details of this subtask."
+          : "Add a new subtask to this task."
+      }
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={submitting}>
@@ -152,8 +165,10 @@ export default function SubtaskFormModal({
 
           <Button onClick={handleSubmit} disabled={submitting}>
             {submitting
-              ? "Saving..."
-              : mode === "edit"
+              ? isEdit
+                ? "Saving..."
+                : "Creating..."
+              : isEdit
                 ? "Save Changes"
                 : "Create Subtask"}
           </Button>
@@ -162,17 +177,23 @@ export default function SubtaskFormModal({
     >
       <div className="space-y-4">
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {parentTaskTitle && (
+          <div>
+            <span className={labelClass}>Parent Task</span>
+            <div className="rounded-lg border border-hair bg-surface-2 px-3 py-2 text-sm text-txt-muted">
+              {parentTaskTitle}
+            </div>
           </div>
         )}
 
         {/* Title */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">
-            Title
-          </label>
-
+          <label className={labelClass}>Title</label>
           <input
             type="text"
             value={values.title}
@@ -184,10 +205,7 @@ export default function SubtaskFormModal({
 
         {/* Description */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">
-            Description
-          </label>
-
+          <label className={labelClass}>Description</label>
           <textarea
             value={values.description}
             onChange={handleChange("description")}
@@ -200,14 +218,11 @@ export default function SubtaskFormModal({
         {/* Status + Priority */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">
-              Status
-            </label>
-
+            <label className={labelClass}>Status</label>
             <select
               value={values.status}
               onChange={handleChange("status")}
-              className={inputClass}
+              className={`${inputClass} capitalize`}
             >
               {STATUS_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -218,14 +233,11 @@ export default function SubtaskFormModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">
-              Priority
-            </label>
-
+            <label className={labelClass}>Priority</label>
             <select
               value={values.priority}
               onChange={handleChange("priority")}
-              className={inputClass}
+              className={`${inputClass} capitalize`}
             >
               {PRIORITY_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -239,10 +251,7 @@ export default function SubtaskFormModal({
         {/* Assignee + Due Date */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">
-              Assignee
-            </label>
-
+            <label className={labelClass}>Assignee</label>
             <select
               value={values.assigned_to}
               onChange={handleChange("assigned_to")}
@@ -259,10 +268,7 @@ export default function SubtaskFormModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">
-              Due Date
-            </label>
-
+            <label className={labelClass}>Due Date</label>
             <input
               type="date"
               value={values.due_date}
@@ -274,20 +280,18 @@ export default function SubtaskFormModal({
 
         {/* Tags */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">
-            Tags
-          </label>
-          <div className="flex min-h-[38px] flex-wrap gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+          <label className={labelClass}>Tags</label>
+          <div className="flex min-h-[38px] flex-wrap gap-1.5 rounded-lg border border-hair bg-surface-1 px-3 py-2 focus-within:border-accentblue focus-within:ring-1 focus-within:ring-accentblue">
             {values.tags.map((tag) => (
               <span
                 key={tag}
-                className="flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-600"
+                className="flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300"
               >
                 {tag}
                 <button
                   type="button"
                   onClick={() => removeTag(tag)}
-                  className="ml-0.5 text-sky-400 hover:text-sky-700"
+                  className="ml-0.5 text-sky-500 hover:text-sky-700 dark:hover:text-sky-200"
                 >
                   ×
                 </button>
@@ -301,14 +305,14 @@ export default function SubtaskFormModal({
               placeholder={
                 values.tags.length === 0 ? "Type and press Enter…" : ""
               }
-              className="min-w-[120px] flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none"
+              className="min-w-[120px] flex-1 bg-transparent text-sm text-txt-primary placeholder:text-txt-muted outline-none"
             />
           </div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-txt-muted">
             Press Enter or comma to add a tag
           </p>
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 }

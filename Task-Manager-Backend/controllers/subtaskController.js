@@ -8,6 +8,7 @@ const {
 } = require("../models");
 const { getIO } = require("../socket");
 const { createNotification } = require("../utils/notify");
+const { createActivity } = require("../utils/activity");
 
 async function loadSubtaskWithUsers(subtaskId) {
   return Subtask.findOne({
@@ -174,6 +175,23 @@ exports.createSubtask = async (req, res) => {
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: projectId,
+      task_id: task.id,
+      user_id: req.user.id,
+      entity_type: "subtask",
+      entity_id: subtask.id,
+      action: "created",
+      description: `Created subtask "${full.title}"`,
+      metadata: {
+        subtask_id: subtask.id,
+        subtask_title: full.title,
+        task_id: task.id,
+        project_id: projectId,
+      },
+    });
 
     return res.status(201).json({
       message: "Subtask created successfully.",
@@ -370,6 +388,23 @@ exports.updateSubtask = async (req, res) => {
         console.error("Socket emit failed:", err.message);
       }
 
+      await createActivity({
+        organization_id: req.user.organization_id,
+        project_id: projectId,
+        task_id: task.id,
+        user_id: req.user.id,
+        entity_type: "subtask",
+        entity_id: subtask.id,
+        action: "updated",
+        description: `Updated subtask "${full.title}"`,
+        metadata: {
+          subtask_id: subtask.id,
+          subtask_title: full.title,
+          task_id: task.id,
+          project_id: projectId,
+        },
+      });
+
       return res.json({
         message: "Subtask status updated successfully.",
         subtask: full,
@@ -478,6 +513,23 @@ exports.updateSubtask = async (req, res) => {
       console.error("Socket emit failed:", err.message);
     }
 
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: projectId,
+      task_id: task.id,
+      user_id: req.user.id,
+      entity_type: "subtask",
+      entity_id: subtask.id,
+      action: "updated",
+      description: `Updated subtask "${full.title}"`,
+      metadata: {
+        subtask_id: subtask.id,
+        subtask_title: full.title,
+        task_id: task.id,
+        project_id: projectId,
+      },
+    });
+
     return res.json({
       message: "Subtask updated successfully.",
       subtask: full,
@@ -548,6 +600,7 @@ exports.deleteSubtask = async (req, res) => {
 
     // 5. Delete subtask
     const deletedSubtaskId = subtask.id;
+    const deletedSubtaskTitle = subtask.title;
     await subtask.destroy();
 
     try {
@@ -555,6 +608,23 @@ exports.deleteSubtask = async (req, res) => {
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: projectId,
+      task_id: task.id,
+      user_id: req.user.id,
+      entity_type: "subtask",
+      entity_id: deletedSubtaskId,
+      action: "deleted",
+      description: `Deleted subtask "${deletedSubtaskTitle}"`,
+      metadata: {
+        subtask_id: deletedSubtaskId,
+        subtask_title: deletedSubtaskTitle,
+        task_id: task.id,
+        project_id: projectId,
+      },
+    });
 
     return res.json({
       message: "Subtask deleted successfully.",

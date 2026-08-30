@@ -5,14 +5,20 @@ const STATUS_OPTIONS = ["planned", "active", "on_hold", "completed", "archived"]
 const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"];
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
 
 function toDateInputValue(value) {
   if (!value) return "";
   return new Date(value).toISOString().slice(0, 10);
 }
 
-export default function ProjectForm({ initialValues, submitting, onSubmit, submitLabel }) {
+export default function ProjectForm({
+  initialValues,
+  submitting,
+  onSubmit,
+  onCancel,
+  submitLabel,
+}) {
   const [values, setValues] = useState({
     name: initialValues?.name ?? "",
     description: initialValues?.description ?? "",
@@ -45,13 +51,13 @@ export default function ProjectForm({ initialValues, submitting, onSubmit, submi
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-          <p className="text-sm text-red-600">{error}</p>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-ink">Name</label>
+        <label className="mb-1.5 block text-sm font-medium text-txt-primary">Name</label>
         <input
           type="text"
           value={values.name}
@@ -62,7 +68,7 @@ export default function ProjectForm({ initialValues, submitting, onSubmit, submi
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-ink">Description</label>
+        <label className="mb-1.5 block text-sm font-medium text-txt-primary">Description</label>
         <textarea
           value={values.description}
           onChange={handleChange("description")}
@@ -74,7 +80,7 @@ export default function ProjectForm({ initialValues, submitting, onSubmit, submi
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Status</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Status</label>
           <select value={values.status} onChange={handleChange("status")} className={inputClass}>
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt} value={opt} className="capitalize">
@@ -85,7 +91,7 @@ export default function ProjectForm({ initialValues, submitting, onSubmit, submi
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Priority</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Priority</label>
           <select value={values.priority} onChange={handleChange("priority")} className={inputClass}>
             {PRIORITY_OPTIONS.map((opt) => (
               <option key={opt} value={opt} className="capitalize">
@@ -98,7 +104,7 @@ export default function ProjectForm({ initialValues, submitting, onSubmit, submi
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Start Date</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Start Date</label>
           <input
             type="date"
             value={values.start_date}
@@ -108,7 +114,7 @@ export default function ProjectForm({ initialValues, submitting, onSubmit, submi
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Due Date</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Due Date</label>
           <input
             type="date"
             value={values.due_date}
@@ -119,6 +125,11 @@ export default function ProjectForm({ initialValues, submitting, onSubmit, submi
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
+        {onCancel && (
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+        )}
         <Button type="submit" disabled={submitting}>
           {submitting ? "Saving..." : submitLabel}
         </Button>

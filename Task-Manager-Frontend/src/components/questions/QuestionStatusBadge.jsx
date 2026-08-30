@@ -1,6 +1,8 @@
+import { BADGE_TONES } from "../ui/badgeTones.js";
+
 const STATUS_STYLES = {
-  open: "bg-sky-50 text-sky-700",
-  resolved: "bg-emerald-50 text-emerald-700",
+  open: BADGE_TONES.sky,
+  resolved: BADGE_TONES.emerald,
 };
 
 const STATUS_LABELS = {

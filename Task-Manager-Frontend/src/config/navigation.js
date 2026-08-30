@@ -49,7 +49,7 @@ export const navigationGroups = [
   {
     title: "SYSTEM",
     items: [
-      { label: "Settings", path: "/settings", icon: Settings, roles: ["owner", "admin"] },
+      { label: "Settings", path: "/settings", icon: Settings, roles: ["owner", "admin", "manager", "member"] },
     ],
   },
 ];

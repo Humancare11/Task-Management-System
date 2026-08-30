@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { OrganizationInvitation, User } = require("../models");
+const { createActivity } = require("../utils/activity");
 
 // POST /api/invitations
 exports.createInvitation = async (req, res) => {
@@ -82,6 +83,22 @@ exports.createInvitation = async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     response.invitation_link = `${frontendUrl}/accept-invitation?token=${token}`;
 
+    await createActivity({
+      organization_id: req.user.organization_id,
+      user_id: req.user.id,
+      entity_type: "invitation",
+      action: "created",
+      entity_id: invitation.id,
+      project_id: null,
+      task_id: null,
+      description: `Sent invitation to "${invitation.email}"`,
+      metadata: {
+        invitation_id: invitation.id,
+        invitee_email: invitation.email,
+        role: invitation.role,
+      },
+    });
+
     return res.status(201).json(response);
   } catch (error) {
     console.error("Create invitation error:", error);
@@ -154,6 +171,22 @@ exports.cancelInvitation = async (req, res) => {
 
     await invitation.save();
 
+    await createActivity({
+      organization_id: req.user.organization_id,
+      user_id: req.user.id,
+      entity_type: "invitation",
+      action: "deleted",
+      entity_id: invitation.id,
+      project_id: null,
+      task_id: null,
+      description: `Cancelled invitation to "${invitation.email}"`,
+      metadata: {
+        invitation_id: invitation.id,
+        invitee_email: invitation.email,
+        status: "cancelled",
+      },
+    });
+
     return res.json({
       message: "Invitation cancelled successfully.",
     });
@@ -201,6 +234,23 @@ exports.resendInvitation = async (req, res) => {
     invitation.accepted_at = null;
 
     await invitation.save();
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      user_id: req.user.id,
+      entity_type: "invitation",
+      action: "updated",
+      entity_id: invitation.id,
+      project_id: null,
+      task_id: null,
+      description: `Resent invitation to "${invitation.email}"`,
+      metadata: {
+        invitation_id: invitation.id,
+        invitee_email: invitation.email,
+        status: "resent",
+        role: invitation.role,
+      },
+    });
 
     return res.json({
       message: "Invitation resent successfully.",

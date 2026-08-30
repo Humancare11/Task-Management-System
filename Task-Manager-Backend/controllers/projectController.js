@@ -1,5 +1,6 @@
 const { Project, ProjectMember, User, Task, Tag } = require("../models");
 const { createNotification } = require("../utils/notify");
+const { createActivity } = require("../utils/activity");
 const { getIO } = require("../socket");
 
 async function loadTaskForBoard(taskId) {
@@ -53,6 +54,19 @@ exports.createProject = async (req, res) => {
       priority: priority || "medium",
       start_date: start_date || null,
       due_date: due_date || null,
+    });
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: project.id,
+      user_id: req.user.id,
+      entity_type: "project",
+      entity_id: project.id,
+      action: "created",
+      description: `Created project "${project.name}"`,
+      metadata: {
+        project_name: project.name,
+      },
     });
 
     return res.status(201).json({
@@ -222,6 +236,19 @@ exports.updateProject = async (req, res) => {
 
     await project.save();
 
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: project.id,
+      user_id: req.user.id,
+      entity_type: "project",
+      entity_id: project.id,
+      action: "updated",
+      description: `Updated project "${project.name}"`,
+      metadata: {
+        project_name: project.name,
+      },
+    });
+
     return res.json({
       message: "Project updated successfully.",
       project,
@@ -251,7 +278,27 @@ exports.deleteProject = async (req, res) => {
       });
     }
 
+    // Capture identifying values before the row (and its FK-referenced id) is gone.
+    const deletedProjectId = project.id;
+    const deletedProjectName = project.name;
+
     await project.destroy();
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      // project_id stays null: the activities.project_id FK cascades on project
+      // deletion, so the deleted project's id is preserved in entity_id/metadata.
+      project_id: null,
+      user_id: req.user.id,
+      entity_type: "project",
+      entity_id: deletedProjectId,
+      action: "deleted",
+      description: `Deleted project "${deletedProjectName}"`,
+      metadata: {
+        project_id: deletedProjectId,
+        project_name: deletedProjectName,
+      },
+    });
 
     return res.json({
       message: "Project deleted successfully.",
@@ -307,9 +354,36 @@ exports.updateProjectMember = async (req, res) => {
       });
     }
 
+    const previousRole = projectMember.role;
     projectMember.role = role;
 
     await projectMember.save();
+
+    const memberUser = await User.findByPk(userId, {
+      attributes: ["id", "first_name", "last_name"],
+    });
+    const memberName = memberUser
+      ? `${memberUser.first_name ?? ""} ${memberUser.last_name ?? ""}`.trim()
+      : "A member";
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: project.id,
+      task_id: null,
+      user_id: req.user.id,
+      entity_type: "member",
+      entity_id: projectMember.id,
+      action: "updated",
+      description: `Updated ${memberName}'s role`,
+      metadata: {
+        member_id: projectMember.id,
+        member_user_id: userId,
+        member_name: memberName,
+        project_id: project.id,
+        previous_role: previousRole,
+        new_role: role,
+      },
+    });
 
     return res.json({
       message: "Project member role updated successfully.",
@@ -355,7 +429,35 @@ exports.removeProjectMember = async (req, res) => {
       });
     }
 
+    const removedMemberId = projectMember.id;
+    const removedMemberRole = projectMember.role;
+
+    const memberUser = await User.findByPk(userId, {
+      attributes: ["id", "first_name", "last_name"],
+    });
+    const memberName = memberUser
+      ? `${memberUser.first_name ?? ""} ${memberUser.last_name ?? ""}`.trim()
+      : "A member";
+
     await projectMember.destroy();
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: project.id,
+      task_id: null,
+      user_id: req.user.id,
+      entity_type: "member",
+      entity_id: removedMemberId,
+      action: "deleted",
+      description: `Removed ${memberName} from the project`,
+      metadata: {
+        member_id: removedMemberId,
+        member_user_id: userId,
+        member_name: memberName,
+        project_id: project.id,
+        role: removedMemberRole,
+      },
+    });
 
     return res.json({
       message: "Project member removed successfully.",
@@ -479,6 +581,21 @@ exports.createTask = async (req, res) => {
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: task.project_id,
+      task_id: task.id,
+      user_id: req.user.id,
+      entity_type: "task",
+      entity_id: task.id,
+      action: "created",
+      description: `Created task "${task.title}"`,
+      metadata: {
+        task_title: task.title,
+        project_id: task.project_id,
+      },
+    });
 
     return res.status(201).json({
       message: "Task created successfully.",
@@ -773,6 +890,21 @@ exports.updateTask = async (req, res) => {
       console.error("Socket emit failed:", err.message);
     }
 
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: task.project_id,
+      task_id: task.id,
+      user_id: req.user.id,
+      entity_type: "task",
+      entity_id: task.id,
+      action: "updated",
+      description: `Updated task "${task.title}"`,
+      metadata: {
+        task_title: task.title,
+        project_id: task.project_id,
+      },
+    });
+
     return res.json({
       message: "Task updated successfully.",
       task: full,
@@ -875,6 +1007,21 @@ exports.updateTask = async (req, res) => {
       console.error("Socket emit failed:", err.message);
     }
 
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: task.project_id,
+      task_id: task.id,
+      user_id: req.user.id,
+      entity_type: "task",
+      entity_id: task.id,
+      action: "updated",
+      description: `Updated task "${task.title}"`,
+      metadata: {
+        task_title: task.title,
+        project_id: task.project_id,
+      },
+    });
+
     return res.json({
       message: "Task updated successfully.",
       task,
@@ -925,6 +1072,8 @@ exports.deleteTask = async (req, res) => {
 
     // 3. Delete task
     const deletedTaskId = task.id;
+    const deletedTaskTitle = task.title;
+    const deletedProjectId = task.project_id;
     await task.destroy();
 
     try {
@@ -932,6 +1081,24 @@ exports.deleteTask = async (req, res) => {
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      // task_id stays null: activities.task_id FK cascades on task deletion,
+      // so the deleted task id is preserved in entity_id / metadata instead.
+      project_id: deletedProjectId,
+      task_id: null,
+      user_id: req.user.id,
+      entity_type: "task",
+      entity_id: deletedTaskId,
+      action: "deleted",
+      description: `Deleted task "${deletedTaskTitle}"`,
+      metadata: {
+        task_id: deletedTaskId,
+        task_title: deletedTaskTitle,
+        project_id: deletedProjectId,
+      },
+    });
 
     return res.json({
       message: "Task deleted successfully.",

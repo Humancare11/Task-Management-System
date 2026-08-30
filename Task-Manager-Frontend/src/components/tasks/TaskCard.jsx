@@ -15,7 +15,7 @@ export default function TaskCard({ task, projectId }) {
   return (
     <Link
       to={`/projects/${projectId ?? task.project_id}/tasks/${task.id}`}
-      className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+      className="block rounded-2xl border border-hair bg-surface-3 p-4 shadow-sm transition hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-2">
         <TaskPriorityBadge priority={task.priority} />
@@ -25,21 +25,21 @@ export default function TaskCard({ task, projectId }) {
             e.preventDefault();
             e.stopPropagation();
           }}
-          className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
           aria-label="Task options"
         >
           <MoreHorizontal size={16} />
         </button>
       </div>
 
-      <h3 className="mt-3 text-sm font-semibold text-ink">{task.title}</h3>
+      <h3 className="mt-3 text-sm font-semibold text-txt-primary">{task.title}</h3>
 
       {task.description && (
-        <p className="mt-1.5 line-clamp-2 text-xs text-slate-500">{task.description}</p>
+        <p className="mt-1.5 line-clamp-2 text-xs text-txt-muted">{task.description}</p>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
-        <span className="text-xs text-slate-500">{formatDueDate(task.due_date)}</span>
+      <div className="mt-4 flex items-center justify-between gap-2 border-t border-hair pt-3">
+        <span className="text-xs text-txt-muted">{formatDueDate(task.due_date)}</span>
         {task.assignee ? (
           <Avatar
             firstName={task.assignee.first_name}
@@ -48,7 +48,7 @@ export default function TaskCard({ task, projectId }) {
             size="sm"
           />
         ) : (
-          <span className="text-xs text-slate-400">Unassigned</span>
+          <span className="text-xs text-txt-muted">Unassigned</span>
         )}
       </div>
     </Link>

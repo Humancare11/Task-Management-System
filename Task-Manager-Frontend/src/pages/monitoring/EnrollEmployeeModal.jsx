@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import Modal from "../../components/common/Modal.jsx";
+// Drawer presentation replaces the old modal. The enrollment flow, API call,
+// validation and one-time credential display are unchanged.
+import Drawer from "../../components/ui/Drawer.jsx";
 import Button from "../../components/ui/Button.jsx";
 import Spinner from "../../components/common/Spinner.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -8,7 +10,9 @@ import { listOrganizationMembers } from "../../api/organizationMembers.js";
 import { enrollEmployeeAgent } from "../../api/monitoring.js";
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary placeholder:text-txt-muted focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
+
+const labelClass = "mb-1.5 block text-sm font-medium text-txt-primary";
 
 function memberName(member) {
   const name = `${member.first_name ?? ""} ${member.last_name ?? ""}`.trim();
@@ -101,26 +105,26 @@ export default function EnrollEmployeeModal({ open, onClose, onEnrolled }) {
 
   if (result) {
     return (
-      <Modal
+      <Drawer
         open={open}
         onClose={resetAndClose}
         title="Monitoring Agent Enrolled"
+        description={`${result.employee?.name ?? ""} · ${result.device_name}`}
         footer={<Button onClick={resetAndClose}>Done</Button>}
       >
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            <span className="font-medium text-ink">{result.employee?.name}</span> ·{" "}
-            {result.device_name}
-          </p>
-
-          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="space-y-3 rounded-lg border border-hair bg-surface-2 p-3">
             <div>
-              <p className="text-xs font-medium text-slate-500">Agent UUID</p>
-              <p className="break-all font-mono text-sm text-ink">{result.agent_uuid}</p>
+              <p className="text-xs font-medium text-txt-muted">Agent UUID</p>
+              <p className="break-all font-mono text-sm text-txt-primary">
+                {result.agent_uuid}
+              </p>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-500">Agent Secret</p>
-              <p className="break-all font-mono text-sm text-ink">{result.agent_secret}</p>
+              <p className="text-xs font-medium text-txt-muted">Agent Secret</p>
+              <p className="break-all font-mono text-sm text-txt-primary">
+                {result.agent_secret}
+              </p>
             </div>
             <Button
               variant="secondary"
@@ -132,21 +136,22 @@ export default function EnrollEmployeeModal({ open, onClose, onEnrolled }) {
             </Button>
           </div>
 
-          <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-700">
+          <p className="rounded-lg bg-amber-500/15 p-3 text-xs text-amber-700 dark:text-amber-300">
             Copy the Agent Secret now — it is shown only once and cannot be
             retrieved later. These credentials are required to configure the
             monitoring agent on this employee's Windows computer.
           </p>
         </div>
-      </Modal>
+      </Drawer>
     );
   }
 
   return (
-    <Modal
+    <Drawer
       open={open}
       onClose={resetAndClose}
-      title="Enroll Employee for Monitoring"
+      title="Add Employee"
+      description="Enroll an employee's device for activity monitoring."
       footer={
         <>
           <Button variant="secondary" onClick={resetAndClose} disabled={submitting}>
@@ -162,9 +167,13 @@ export default function EnrollEmployeeModal({ open, onClose, onEnrolled }) {
         <Spinner label="Loading employees..." />
       ) : (
         <div className="space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-txt-muted">
+            Employee Information
+          </p>
+
           <div>
-            <label htmlFor="enroll-employee" className="mb-1.5 block text-sm font-medium text-ink">
-              Employee
+            <label htmlFor="enroll-employee" className={labelClass}>
+              Employee <span className="text-red-500">*</span>
             </label>
             <select
               id="enroll-employee"
@@ -185,8 +194,8 @@ export default function EnrollEmployeeModal({ open, onClose, onEnrolled }) {
           </div>
 
           <div>
-            <label htmlFor="enroll-device" className="mb-1.5 block text-sm font-medium text-ink">
-              Device Name
+            <label htmlFor="enroll-device" className={labelClass}>
+              Device Name <span className="text-red-500">*</span>
             </label>
             <input
               id="enroll-device"
@@ -202,15 +211,15 @@ export default function EnrollEmployeeModal({ open, onClose, onEnrolled }) {
           </div>
 
           {selectedMember && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-txt-muted">
               Enrolling {memberName(selectedMember)}'s device for activity
               monitoring in your organization.
             </p>
           )}
 
-          {fieldError && <p className="text-xs text-red-600">{fieldError}</p>}
+          {fieldError && <p className="text-xs text-red-600 dark:text-red-400">{fieldError}</p>}
         </div>
       )}
-    </Modal>
+    </Drawer>
   );
 }

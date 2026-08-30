@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "../components/AuthLayout.jsx";
-import FormField from "../components/FormField.jsx";
+import AuthShell from "../components/auth/AuthShell.jsx";
+import AuthField from "../components/auth/AuthField.jsx";
 import api from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -47,82 +47,89 @@ export default function Register() {
   }
 
   return (
-    <AuthLayout
-      title="Create your account"
-      subtitle="Free access to our dashboard."
+    <AuthShell
+      title="Create your workspace"
+      subtitle="Set up your workspace and start managing your team's work."
       footer={
         <>
           Already have an account?{" "}
-          <Link to="/login" className="text-white font-medium hover:underline">
-            Sign in here
+          <Link to="/login" className="font-medium text-accentblue hover:underline">
+            Sign in
           </Link>
         </>
       }
     >
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-2 gap-3">
-          <FormField
+        <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+          <AuthField
             label="First name"
             name="first_name"
             value={form.first_name}
             onChange={handleChange}
             placeholder="John"
+            autoComplete="given-name"
             required
           />
-          <FormField
+          <AuthField
             label="Last name"
             name="last_name"
             value={form.last_name}
             onChange={handleChange}
             placeholder="Parker"
+            autoComplete="family-name"
           />
         </div>
 
-        <FormField
+        <AuthField
           label="Company name"
           name="company_name"
           value={form.company_name}
           onChange={handleChange}
           placeholder="Acme Inc"
+          autoComplete="organization"
           required
         />
 
-        <FormField
+        <AuthField
           label="Email address"
           type="email"
           name="email"
           value={form.email}
           onChange={handleChange}
           placeholder="name@example.com"
+          autoComplete="email"
           required
         />
 
-        <FormField
+        <AuthField
           label="Password"
           type="password"
           name="password"
           value={form.password}
           onChange={handleChange}
           placeholder="8+ characters required"
+          autoComplete="new-password"
           required
           minLength={8}
         />
 
-        <label className="flex items-center gap-2 text-sm text-white/70 mb-6 mt-1">
+        <label className="mb-6 mt-1 flex items-center gap-2 text-sm text-txt-muted">
           <input
             type="checkbox"
             checked={acceptedTerms}
             onChange={(e) => setAcceptedTerms(e.target.checked)}
-            className="w-4 h-4 rounded border-white/30 bg-white/10 accent-white"
+            className="h-4 w-4 rounded border-hair accent-accentblue"
           />
-          I accept the{" "}
-          <a href="/terms" className="text-white hover:underline">
-            Terms and Conditions
-          </a>
+          <span>
+            I accept the{" "}
+            <a href="/terms" className="text-accentblue hover:underline">
+              Terms and Conditions
+            </a>
+          </span>
         </label>
 
         {error && (
-          <p className="text-sm text-red-400 mb-4" role="alert">
+          <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400" role="alert">
             {error}
           </p>
         )}
@@ -130,11 +137,11 @@ export default function Register() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-white text-black font-medium py-2.5 hover:bg-white/90 transition-colors disabled:opacity-60"
+          className="w-full rounded-lg bg-accentblue py-2.5 text-sm font-medium text-white transition-colors hover:bg-accentblue-hover disabled:opacity-60"
         >
           {loading ? "Signing up…" : "Sign up"}
         </button>
       </form>
-    </AuthLayout>
+    </AuthShell>
   );
 }

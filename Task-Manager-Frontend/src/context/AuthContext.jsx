@@ -16,6 +16,16 @@ export function AuthProvider({ children }) {
     setUser(userData);
   }
 
+  // Merge partial profile data into the current user (state + localStorage).
+  // Used after a successful self-service profile update.
+  function updateUser(partialUser) {
+    setUser((prev) => {
+      const next = { ...(prev ?? {}), ...partialUser };
+      localStorage.setItem("user", JSON.stringify(next));
+      return next;
+    });
+  }
+
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -24,7 +34,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

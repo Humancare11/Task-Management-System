@@ -1,4 +1,5 @@
 const { ProjectMember, Project, User, OrganizationMember } = require("../models");
+const { createActivity } = require("../utils/activity");
 
 // POST /api/projects/:projectId/members
 exports.addProjectMember = async (req, res) => {
@@ -59,6 +60,31 @@ exports.addProjectMember = async (req, res) => {
       project_id: project.id,
       user_id,
       role,
+    });
+
+    const memberUser = await User.findByPk(user_id, {
+      attributes: ["id", "first_name", "last_name"],
+    });
+    const memberName = memberUser
+      ? `${memberUser.first_name ?? ""} ${memberUser.last_name ?? ""}`.trim()
+      : "A member";
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: project.id,
+      task_id: null,
+      user_id: req.user.id,
+      entity_type: "member",
+      entity_id: projectMember.id,
+      action: "created",
+      description: `Added ${memberName} to the project`,
+      metadata: {
+        member_id: projectMember.id,
+        member_user_id: user_id,
+        member_name: memberName,
+        project_id: project.id,
+        role,
+      },
     });
 
     res.status(201).json({

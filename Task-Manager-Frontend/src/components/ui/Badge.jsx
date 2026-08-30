@@ -1,17 +1,19 @@
+import { BADGE_TONES } from "./badgeTones.js";
+
 const roleVariants = {
-  owner: "bg-purple-50 text-purple-700",
-  admin: "bg-indigo-50 text-primary-700",
-  manager: "bg-blue-50 text-blue-700",
-  member: "bg-slate-100 text-slate-600",
-  client: "bg-amber-50 text-amber-700",
+  owner: BADGE_TONES.purple,
+  admin: BADGE_TONES.blue,
+  manager: BADGE_TONES.sky,
+  member: BADGE_TONES.neutral,
+  client: BADGE_TONES.amber,
 };
 
 const toneVariants = {
-  neutral: "bg-slate-100 text-slate-600",
-  success: "bg-emerald-50 text-emerald-700",
-  warning: "bg-amber-50 text-amber-700",
-  danger: "bg-red-50 text-red-700",
-  info: "bg-sky-50 text-sky-700",
+  neutral: BADGE_TONES.neutral,
+  success: BADGE_TONES.emerald,
+  warning: BADGE_TONES.amber,
+  danger: BADGE_TONES.red,
+  info: BADGE_TONES.sky,
 };
 
 export default function Badge({ role, tone = "neutral", children, className = "" }) {

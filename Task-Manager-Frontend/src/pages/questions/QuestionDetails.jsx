@@ -70,8 +70,8 @@ function formatDate(value) {
 function DetailRow({ label, value }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className="text-right text-sm font-medium text-ink">{value}</span>
+      <span className="text-sm text-txt-muted">{label}</span>
+      <span className="text-right text-sm font-medium text-txt-primary">{value}</span>
     </div>
   );
 }
@@ -331,28 +331,28 @@ export default function QuestionDetails() {
     <AppLayout title="Question">
       <div className="space-y-4">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 text-sm text-slate-400">
-          <Link to="/dashboard" className="hover:text-slate-600">Dashboard</Link>
+        <div className="flex items-center gap-1.5 text-sm text-txt-muted">
+          <Link to="/dashboard" className="hover:text-txt-primary">Dashboard</Link>
           <ChevronRight size={14} />
-          <Link to="/questions" className="hover:text-slate-600">Questions</Link>
+          <Link to="/questions" className="hover:text-txt-primary">Questions</Link>
           <ChevronRight size={14} />
-          <span className="text-slate-600">Question Details</span>
+          <span className="text-txt-primary">{questionCode}</span>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Main thread */}
           <div className="space-y-4 lg:col-span-2">
             {/* Header card */}
-            <div className="rounded-xl border border-slate-200 bg-white p-5 flex justify-between items-start gap-4">
+            <div className="rounded-xl border border-hair bg-surface-1 p-5 flex justify-between items-start gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <QuestionStatusBadge status={question.status} />
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-slate-500">
+                  <span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium capitalize text-txt-muted">
                     {question.category?.replace("_", " ")}
                   </span>
                 </div>
-                <h1 className="mt-3 font-display text-lg font-semibold text-ink">{question.title}</h1>
-                <p className="mt-1 text-xs text-slate-400">{questionCode}</p>
+                <h1 className="mt-3 font-display text-lg font-semibold text-txt-primary">{question.title}</h1>
+                <p className="mt-1 text-xs text-txt-muted">{questionCode}</p>
               </div>
 
               {/* Status Dropdown */}
@@ -362,10 +362,10 @@ export default function QuestionDetails() {
                     type="button"
                     onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
                     disabled={updatingStatus}
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="flex items-center gap-1.5 rounded-lg border border-hair bg-surface-1 px-3 py-1.5 text-xs font-medium text-txt-muted shadow-sm transition hover:bg-surface-2 focus:outline-none focus:ring-1 focus:ring-accentblue"
                   >
                     <span>Mark as</span>
-                    <ChevronDown size={14} className="text-slate-400" />
+                    <ChevronDown size={14} className="text-txt-muted" />
                   </button>
 
                   {statusDropdownOpen && (
@@ -374,18 +374,18 @@ export default function QuestionDetails() {
                         className="fixed inset-0 z-10"
                         onClick={() => setStatusDropdownOpen(false)}
                       />
-                      <div className="absolute right-0 mt-1 z-20 w-36 origin-top-right rounded-lg border border-slate-200 bg-white p-1 shadow-lg focus:outline-none">
+                      <div className="absolute right-0 mt-1 z-20 w-36 origin-top-right rounded-lg border border-hair bg-surface-1 p-1 shadow-lg focus:outline-none">
                         <button
                           type="button"
                           onClick={() => handleStatusChange("open")}
-                          className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-txt-primary hover:bg-surface-2"
                         >
                           Open
                         </button>
                         <button
                           type="button"
                           onClick={() => handleStatusChange("in_progress")}
-                          className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-txt-primary hover:bg-surface-2"
                         >
                           In Progress
                         </button>
@@ -393,7 +393,7 @@ export default function QuestionDetails() {
                           type="button"
                           onClick={() => handleStatusChange("resolved")}
                           disabled={!hasAcceptedAnswer}
-                          className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                          className="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-txt-primary hover:bg-surface-2 disabled:opacity-40"
                           title={!hasAcceptedAnswer ? "Accept an answer before resolving." : undefined}
                         >
                           Resolved
@@ -406,17 +406,17 @@ export default function QuestionDetails() {
             </div>
 
             {/* Question message */}
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="rounded-xl border border-hair bg-surface-1 p-5">
               <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accentblue-soft text-accentblue">
                   <HelpCircle size={18} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-ink">Question</span>
-                    <span className="text-xs text-slate-400">{formatDateTime(question.created_at)}</span>
+                    <span className="text-sm font-medium text-txt-primary">Question</span>
+                    <span className="text-xs text-txt-muted">{formatDateTime(question.created_at)}</span>
                   </div>
-                  <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">
+                  <p className="mt-1 whitespace-pre-line text-sm leading-6 text-txt-muted">
                     {question.description}
                   </p>
 
@@ -437,16 +437,16 @@ export default function QuestionDetails() {
             {/* Answers thread */}
             <div className="space-y-3">
               {answers.length === 0 && (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center">
-                  <p className="text-sm text-slate-400">No answers yet. Be the first to help.</p>
+                <div className="rounded-xl border border-dashed border-hair bg-surface-1 px-5 py-8 text-center">
+                  <p className="text-sm text-txt-muted">No answers yet. Be the first to help.</p>
                 </div>
               )}
 
               {answers.map((answer) => (
                 <div
                   key={answer.id}
-                  className={`rounded-xl border bg-white p-5 ${
-                    answer.is_accepted ? "border-emerald-200" : "border-slate-200"
+                  className={`rounded-xl border bg-surface-1 p-5 ${
+                    answer.is_accepted ? "border-emerald-500/40" : "border-hair"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -459,7 +459,7 @@ export default function QuestionDetails() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-ink">
+                          <span className="text-sm font-medium text-txt-primary">
                             {answer.author
                               ? `${answer.author.first_name} ${answer.author.last_name}`
                               : "Unknown"}
@@ -472,7 +472,7 @@ export default function QuestionDetails() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className="text-xs text-slate-400">{formatDateTime(answer.created_at)}</span>
+                          <span className="text-xs text-txt-muted">{formatDateTime(answer.created_at)}</span>
                           {canAcceptAnswer(user, question) && !answer.is_accepted && (
                             <button
                               type="button"
@@ -487,7 +487,7 @@ export default function QuestionDetails() {
                             <button
                               type="button"
                               onClick={() => startEditingAnswer(answer)}
-                              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              className="rounded-md p-1.5 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
                               title="Edit"
                             >
                               <Pencil size={14} />
@@ -497,7 +497,7 @@ export default function QuestionDetails() {
                             <button
                               type="button"
                               onClick={() => setAnswerToDelete(answer)}
-                              className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                              className="rounded-md p-1.5 text-txt-muted hover:bg-red-500/10 hover:text-red-500"
                               title="Delete"
                             >
                               <Trash2 size={14} />
@@ -512,7 +512,7 @@ export default function QuestionDetails() {
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
                             rows={3}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                            className="w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue"
                           />
                           <div className="flex gap-2">
                             <Button size="sm" onClick={() => handleSaveAnswerEdit(answer.id)}>
@@ -529,7 +529,7 @@ export default function QuestionDetails() {
                           </div>
                         </div>
                       ) : (
-                        <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">
+                        <p className="mt-1 whitespace-pre-line text-sm leading-6 text-txt-muted">
                           {answer.content}
                         </p>
                       )}
@@ -552,7 +552,7 @@ export default function QuestionDetails() {
             </div>
 
             {/* Composer */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-xl border border-hair bg-surface-1 p-4">
               <div className="flex gap-3">
                 <Avatar
                   firstName={user?.first_name}
@@ -566,9 +566,9 @@ export default function QuestionDetails() {
                     onChange={(e) => setAnswerText(e.target.value)}
                     rows={3}
                     placeholder="Write a reply..."
-                    className="w-full resize-none border-0 bg-transparent p-0 text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                    className="w-full resize-none border-0 bg-transparent p-0 text-sm text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-0"
                   />
-                  <div className="mt-2 flex justify-end border-t border-slate-100 pt-2">
+                  <div className="mt-2 flex justify-end border-t border-hair pt-2">
                     <Button
                       size="sm"
                       icon={Send}
@@ -585,9 +585,9 @@ export default function QuestionDetails() {
 
           {/* Sidebar */}
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="mb-1 font-display text-base font-semibold text-ink">Question Details</h2>
-              <div className="divide-y divide-slate-100">
+            <div className="rounded-xl border border-hair bg-surface-1 p-5">
+              <h2 className="mb-1 font-display text-base font-semibold text-txt-primary">Question Details</h2>
+              <div className="divide-y divide-hair">
                 <DetailRow label="Question ID" value={questionCode} />
                 <DetailRow label="Category" value={<span className="capitalize">{question.category?.replace("_", " ")}</span>} />
                 <DetailRow label="Priority" value={<QuestionPriorityBadge priority={question.priority} />} />
@@ -596,7 +596,7 @@ export default function QuestionDetails() {
                   <DetailRow
                     label="Project"
                     value={
-                      <Link to={`/projects/${question.project.id}`} className="text-primary-600 hover:text-primary-700">
+                      <Link to={`/projects/${question.project.id}`} className="text-accentblue hover:text-accentblue-hover">
                         {question.project.name}
                       </Link>
                     }
@@ -606,8 +606,8 @@ export default function QuestionDetails() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="mb-3 font-display text-base font-semibold text-ink">Status</h2>
+            <div className="rounded-xl border border-hair bg-surface-1 p-5">
+              <h2 className="mb-3 font-display text-base font-semibold text-txt-primary">Status</h2>
               <QuestionStatusBadge status={question.status} />
 
               {canResolveQuestion(user, question) && question.status !== "resolved" && (
@@ -622,7 +622,7 @@ export default function QuestionDetails() {
               )}
 
               {question.status !== "resolved" && !hasAcceptedAnswer && canResolveQuestion(user, question) && (
-                <p className="mt-2 text-xs text-slate-400">
+                <p className="mt-2 text-xs text-txt-muted">
                   Accept an answer before resolving this question.
                 </p>
               )}

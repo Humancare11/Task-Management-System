@@ -1,95 +1,157 @@
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
-import { X, LayoutGrid, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { NavLink, Link } from "react-router-dom";
+import { X, LayoutGrid, Plus, ChevronDown } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { navigationGroups } from "../../config/navigation.js";
+import { canCreateProject } from "../../config/permissions.js";
+import UserMenu from "./UserMenu.jsx";
 
 export default function Sidebar({ open, onClose }) {
   const { user } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+
+  const visibleGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.roles.includes(user?.role)),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  // Flattened list for the icon rail, with a divider flag between groups.
+  const railItems = visibleGroups.flatMap((group, groupIndex) =>
+    group.items.map((item, itemIndex) => ({
+      ...item,
+      dividerBefore: groupIndex > 0 && itemIndex === 0,
+    })),
+  );
+
+  const railLinkClass = ({ isActive }) =>
+    `flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+      isActive
+        ? "bg-accentblue-soft text-accentblue"
+        : "text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
+    }`;
+
+  const navLinkClass = ({ isActive }) =>
+    `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] transition-colors ${
+      isActive
+        ? "bg-accentblue text-white"
+        : "text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
+    }`;
 
   return (
     <>
       {open && (
         <div
-          className="fixed inset-0 z-30 bg-ink/40 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col transform bg-ink text-white transition-all duration-200 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+      <div
+        className={`fixed inset-y-0 left-0 z-40 flex transform transition-transform duration-200 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
-        } ${collapsed ? "lg:w-[76px]" : "w-64 lg:w-64"}`}
+        }`}
       >
-        <div className="flex items-center justify-between gap-2 px-4 py-5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
-              <LayoutGrid size={18} />
-            </span>
-            {!collapsed && (
-              <span className="truncate font-display text-base font-bold">
-                Humancare Connect
-              </span>
-            )}
-          </div>
-          <button
+        {/* Icon-only nav rail */}
+        <div className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-hair bg-rail py-3">
+          <Link
+            to="/dashboard"
             onClick={onClose}
-            className="rounded-md p-1 text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
-            aria-label="Close menu"
+            className="mb-1 flex h-8 w-8 items-center justify-center rounded-lg bg-accentblue text-white"
+            aria-label="Home"
           >
-            <X size={20} />
-          </button>
+            <LayoutGrid size={17} />
+          </Link>
+
+          <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
+            {railItems.map((item) => (
+              <div key={`rail-${item.path}`} className="flex flex-col items-center">
+                {item.dividerBefore && (
+                  <span className="my-1 h-px w-6 bg-hair" aria-hidden="true" />
+                )}
+                <NavLink
+                  to={item.path}
+                  onClick={onClose}
+                  title={item.label}
+                  aria-label={item.label}
+                  className={railLinkClass}
+                >
+                  <item.icon size={17} />
+                </NavLink>
+              </div>
+            ))}
+          </nav>
+
+          <div className="mt-1 border-t border-hair pt-2">
+            <UserMenu compact />
+          </div>
         </div>
 
-        <nav className="mt-2 flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4">
-          {navigationGroups.map((group) => {
-            const items = group.items.filter((item) =>
-              item.roles.includes(user?.role),
-            );
-            if (items.length === 0) return null;
+        {/* Full sidebar */}
+        <aside className="flex w-[220px] shrink-0 flex-col border-r border-hair bg-surface-1 text-txt-primary">
+          <div className="flex items-start justify-between gap-2 px-4 py-4">
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-2 text-left"
+            >
+              <span className="min-w-0">
+                <span className="flex items-center gap-1 text-sm font-semibold text-txt-primary">
+                  <span className="truncate">
+                    {user?.first_name ? `${user.first_name}'s Workspace` : "Workspace"}
+                  </span>
+                  <ChevronDown size={14} className="shrink-0 text-txt-muted" />
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-txt-muted">
+                  Humancare Connect
+                </span>
+              </span>
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary lg:hidden"
+              aria-label="Close menu"
+            >
+              <X size={18} />
+            </button>
+          </div>
 
-            return (
+          <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
+            {visibleGroups.map((group) => (
               <div key={group.title}>
-                {!collapsed && (
-                  <p className="px-3 text-xs font-semibold tracking-wider text-white/40">
-                    {group.title}
-                  </p>
-                )}
-                <div className="mt-2 flex flex-col gap-1">
-                  {items.map((item) => (
+                <p className="px-2.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-txt-muted">
+                  {group.title}
+                </p>
+                <div className="mt-1.5 flex flex-col gap-0.5">
+                  {group.items.map((item) => (
                     <NavLink
                       key={item.path}
                       to={item.path}
                       onClick={onClose}
-                      title={collapsed ? item.label : undefined}
-                      className={({ isActive }) =>
-                        `group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          isActive
-                            ? "bg-primary-600/90 text-white"
-                            : "text-white/70 hover:bg-white/10 hover:text-white"
-                        } ${collapsed ? "lg:justify-center" : ""}`
-                      }
+                      className={navLinkClass}
                     >
-                      <item.icon size={18} className="shrink-0" />
-                      {!collapsed && item.label}
+                      <item.icon size={15} className="shrink-0" />
+                      <span className="truncate">{item.label}</span>
                     </NavLink>
                   ))}
                 </div>
               </div>
-            );
-          })}
-        </nav>
+            ))}
+          </nav>
 
-        <button
-          onClick={() => setCollapsed((v) => !v)}
-          className="hidden items-center gap-2 border-t border-white/10 px-4 py-3 text-xs font-medium text-white/60 hover:bg-white/10 hover:text-white lg:flex"
-        >
-          {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
-          {!collapsed && "Collapse"}
-        </button>
-      </aside>
+          {canCreateProject(user) && (
+            <div className="border-t border-hair p-3">
+              <Link
+                to="/projects?create=1"
+                onClick={onClose}
+                className="flex items-center justify-center gap-2 rounded-lg bg-accentblue px-3 py-2 text-[12px] font-medium text-white transition-colors hover:bg-accentblue-hover"
+              >
+                <Plus size={15} />
+                Create project
+              </Link>
+            </div>
+          )}
+        </aside>
+      </div>
     </>
   );
 }

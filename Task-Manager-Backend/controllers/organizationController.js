@@ -5,6 +5,7 @@ const {
   OrganizationMember,
   OrganizationInvitation,
 } = require("../models");
+const { createActivity } = require("../utils/activity");
 
 
 // GET /api/organization/members
@@ -100,6 +101,22 @@ exports.createInvitation = async (req, res) => {
       invited_by: req.user.id,
       status: "pending",
       expires_at: expiresAt,
+    });
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      user_id: req.user.id,
+      entity_type: "invitation",
+      action: "created",
+      entity_id: invitation.id,
+      project_id: null,
+      task_id: null,
+      description: `Sent invitation to "${invitation.email}"`,
+      metadata: {
+        invitation_id: invitation.id,
+        invitee_email: invitation.email,
+        role: invitation.role,
+      },
     });
 
     res.status(201).json({
@@ -249,6 +266,24 @@ exports.acceptInvitation = async (req, res) => {
     await invitation.save({ transaction });
 
     await transaction.commit();
+
+    // Organization scope comes from the validated invitation, not req.user —
+    // the accepting user may be joining an organization other than their current one.
+    await createActivity({
+      organization_id: invitation.organization_id,
+      user_id: req.user.id,
+      entity_type: "invitation",
+      action: "updated",
+      entity_id: invitation.id,
+      project_id: null,
+      task_id: null,
+      description: `Accepted invitation`,
+      metadata: {
+        invitation_id: invitation.id,
+        invitee_email: invitation.email,
+        status: "accepted",
+      },
+    });
 
     return res.status(200).json({
       message: "Invitation accepted successfully.",

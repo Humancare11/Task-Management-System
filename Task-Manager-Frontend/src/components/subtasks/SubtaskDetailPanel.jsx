@@ -208,21 +208,21 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
 
   if (loading) {
     return (
-      <div className="py-4 text-center text-xs text-slate-400">
+      <div className="py-4 text-center text-xs text-txt-muted">
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3">
+    <div className="space-y-4 rounded-lg border border-hair bg-surface-1 px-3 py-3">
       {/* Attachments */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h4 className="text-xs font-semibold text-slate-600">
+          <h4 className="text-xs font-semibold text-txt-muted">
             Attachments
             {attachments.length > 0 && (
-              <span className="ml-1 text-slate-400">
+              <span className="ml-1 text-txt-muted">
                 ({attachments.length})
               </span>
             )}
@@ -232,7 +232,7 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={attachmentUploading}
-              className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700 disabled:opacity-40"
+              className="flex items-center gap-1 text-xs font-medium text-accentblue hover:text-accentblue disabled:opacity-40"
             >
               <Upload size={12} />
               {attachmentUploading ? "Uploading…" : "Upload"}
@@ -255,15 +255,15 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
               return (
                 <div
                   key={file.id}
-                  className="group flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 py-2"
+                  className="group flex items-center justify-between rounded-lg border border-hair bg-surface-1 px-2.5 py-2"
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <Paperclip size={14} className="shrink-0 text-slate-400" />
+                    <Paperclip size={14} className="shrink-0 text-txt-muted" />
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-slate-700">
+                      <p className="truncate text-xs font-medium text-txt-primary">
                         {file.file_name}
                       </p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-txt-muted">
                         {formatFileSize(file.file_size)}
                       </p>
                     </div>
@@ -273,7 +273,7 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
                       href={`${API_ORIGIN}${file.url}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
                       title="Download"
                     >
                       <Download size={13} />
@@ -282,7 +282,7 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
                       <button
                         type="button"
                         onClick={() => setAttachmentToDelete(file)}
-                        className="hidden rounded-md p-1 text-slate-300 hover:bg-red-50 hover:text-red-500 group-hover:block"
+                        className="hidden rounded-md p-1 text-txt-muted hover:bg-red-500/10 hover:text-red-500 group-hover:block"
                         title="Delete"
                       >
                         <Trash2 size={13} />
@@ -306,11 +306,11 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
             onClick={() => fileInputRef.current?.click()}
             className={`cursor-pointer rounded-lg border-2 border-dashed px-3 py-3 text-center transition ${
               dragOver
-                ? "border-sky-400 bg-sky-50"
-                : "border-slate-200 hover:border-slate-300"
+                ? "border-accentblue bg-accentblue-soft"
+                : "border-hair hover:border-hair"
             }`}
           >
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-txt-muted">
               {attachmentUploading
                 ? "Uploading…"
                 : "Drop a file here or click to upload"}
@@ -319,22 +319,22 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
         )}
 
         {!canParticipate && attachments.length === 0 && (
-          <p className="text-xs text-slate-400">No attachments</p>
+          <p className="text-xs text-txt-muted">No attachments</p>
         )}
       </div>
 
       {/* Comments */}
-      <div className="border-t border-slate-200 pt-3">
-        <h4 className="mb-2 text-xs font-semibold text-slate-600">
+      <div className="border-t border-hair pt-3">
+        <h4 className="mb-2 text-xs font-semibold text-txt-muted">
           Comments
           {comments.length > 0 && (
-            <span className="ml-1 text-slate-400">({comments.length})</span>
+            <span className="ml-1 text-txt-muted">({comments.length})</span>
           )}
         </h4>
 
         <div className="mb-3 space-y-3">
           {comments.length === 0 && (
-            <p className="text-xs text-slate-400">No comments yet.</p>
+            <p className="text-xs text-txt-muted">No comments yet.</p>
           )}
 
           {comments.map((comment) => {
@@ -352,24 +352,24 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-800">
+                    <span className="text-xs font-semibold text-txt-primary">
                       {getUserName(comment.author)}
                     </span>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-txt-muted">
                       {timeAgo(comment.created_at)}
                     </span>
                     {canDeleteThisComment && (
                       <button
                         type="button"
                         onClick={() => setCommentToDelete(comment)}
-                        className="ml-auto hidden rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500 group-hover:block"
+                        className="ml-auto hidden rounded p-1 text-txt-muted hover:bg-red-500/10 hover:text-red-500 group-hover:block"
                         title="Delete comment"
                       >
                         <Trash2 size={12} />
                       </button>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs leading-5 text-slate-600">
+                  <p className="mt-0.5 text-xs leading-5 text-txt-muted">
                     {comment.content}
                   </p>
                 </div>
@@ -388,7 +388,7 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
                 size="sm"
               />
             </div>
-            <div className="flex-1 rounded-lg border border-slate-200 bg-white transition focus-within:border-sky-300 focus-within:ring-1 focus-within:ring-sky-100">
+            <div className="flex-1 rounded-lg border border-hair bg-surface-1 transition focus-within:border-accentblue focus-within:ring-1 focus-within:ring-accentblue/30">
               <textarea
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
@@ -396,14 +396,14 @@ export default function SubtaskDetailPanel({ projectId, taskId, subtask }) {
                 placeholder="Write a comment…"
                 disabled={commentSending}
                 rows={2}
-                className="w-full resize-none rounded-t-lg px-2.5 pt-2 text-xs text-slate-700 placeholder-slate-400 outline-none"
+                className="w-full resize-none rounded-t-lg px-2.5 pt-2 text-xs text-txt-primary placeholder:text-txt-muted outline-none"
               />
               <div className="flex justify-end px-2.5 pb-1.5">
                 <button
                   type="button"
                   onClick={handleSendComment}
                   disabled={commentSending || !commentText.trim()}
-                  className="rounded-md bg-sky-600 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-sky-700 disabled:opacity-40"
+                  className="rounded-md bg-accentblue px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-accentblue-hover disabled:opacity-40"
                 >
                   {commentSending ? "Sending…" : "Send"}
                 </button>

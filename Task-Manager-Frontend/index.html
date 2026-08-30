@@ -12,6 +12,19 @@
     />
   </head>
   <body>
+    <script>
+      // Apply the persisted theme before first paint to avoid a flash.
+      // Default is dark unless the user explicitly chose light.
+      (function () {
+        try {
+          if (localStorage.getItem("tms-theme") !== "light") {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -1,9 +1,11 @@
+import { BADGE_TONES } from "../ui/badgeTones.js";
+
 const STATUS_STYLES = {
-  planned: "bg-slate-100 text-slate-600",
-  active: "bg-emerald-50 text-emerald-700",
-  on_hold: "bg-amber-50 text-amber-700",
-  completed: "bg-sky-50 text-sky-700",
-  archived: "bg-slate-200 text-slate-500",
+  planned: BADGE_TONES.neutral,
+  active: BADGE_TONES.emerald,
+  on_hold: BADGE_TONES.amber,
+  completed: BADGE_TONES.sky,
+  archived: BADGE_TONES.neutral,
 };
 
 const STATUS_LABELS = {

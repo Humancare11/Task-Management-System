@@ -9,7 +9,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 const PROJECT_ROLE_OPTIONS = ["manager", "member", "viewer"];
 
 const selectClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
 
 export default function AddProjectMemberModal({ open, onClose, projectId, existingMembers, onAdded }) {
   const toast = useToast();
@@ -67,15 +67,15 @@ export default function AddProjectMemberModal({ open, onClose, projectId, existi
       }
     >
       {loading ? (
-        <p className="text-sm text-slate-500">Loading organization members...</p>
+        <p className="text-sm text-txt-muted">Loading organization members...</p>
       ) : availableMembers.length === 0 ? (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-txt-muted">
           All organization members are already on this project.
         </p>
       ) : (
         <div className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">User</label>
+            <label className="mb-1.5 block text-sm font-medium text-txt-primary">User</label>
             <select value={userId} onChange={(e) => setUserId(e.target.value)} className={selectClass}>
               <option value="">Select a user...</option>
               {availableMembers.map((m) => (
@@ -87,7 +87,7 @@ export default function AddProjectMemberModal({ open, onClose, projectId, existi
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">Role</label>
+            <label className="mb-1.5 block text-sm font-medium text-txt-primary">Role</label>
             <select value={role} onChange={(e) => setRole(e.target.value)} className={selectClass}>
               {PROJECT_ROLE_OPTIONS.map((opt) => (
                 <option key={opt} value={opt} className="capitalize">

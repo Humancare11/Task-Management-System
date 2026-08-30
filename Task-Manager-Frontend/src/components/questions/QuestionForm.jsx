@@ -16,7 +16,7 @@ const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"];
 const VISIBILITY_OPTIONS = ["organization", "project", "private"];
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
 
 export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
   const [values, setValues] = useState({
@@ -91,13 +91,13 @@ export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-          <p className="text-sm text-red-600">{error}</p>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-ink">Title</label>
+        <label className="mb-1.5 block text-sm font-medium text-txt-primary">Title</label>
         <input
           type="text"
           value={values.title}
@@ -108,7 +108,7 @@ export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-ink">Description</label>
+        <label className="mb-1.5 block text-sm font-medium text-txt-primary">Description</label>
         <textarea
           value={values.description}
           onChange={handleChange("description")}
@@ -121,7 +121,7 @@ export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
       {/* Project and Assignee Selection */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Project (Optional)</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Project (Optional)</label>
           <select
             value={values.project_id}
             onChange={handleChange("project_id")}
@@ -138,7 +138,7 @@ export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Assignee (Optional)</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Assignee (Optional)</label>
           <select
             value={values.assigned_to}
             onChange={handleChange("assigned_to")}
@@ -159,7 +159,7 @@ export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Category</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Category</label>
           <select value={values.category} onChange={handleChange("category")} className={inputClass}>
             {CATEGORY_OPTIONS.map((opt) => (
               <option key={opt} value={opt} className="capitalize">
@@ -170,7 +170,7 @@ export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Priority</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Priority</label>
           <select value={values.priority} onChange={handleChange("priority")} className={inputClass}>
             {PRIORITY_OPTIONS.map((opt) => (
               <option key={opt} value={opt} className="capitalize">
@@ -181,7 +181,7 @@ export default function QuestionForm({ submitting, onSubmit, submitLabel }) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink">Visibility</label>
+          <label className="mb-1.5 block text-sm font-medium text-txt-primary">Visibility</label>
           <select value={values.visibility} onChange={handleChange("visibility")} className={inputClass}>
             {VISIBILITY_OPTIONS.map((opt) => (
               <option key={opt} value={opt} className="capitalize">

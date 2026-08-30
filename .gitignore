@@ -23,7 +23,3 @@ logs/
 .vscode/
 .DS_Store
 Thumbs.db
-
-
-# Don't push Task Monitoring Agent
-# Task-Monitoring-Agent/

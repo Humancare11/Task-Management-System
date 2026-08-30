@@ -131,10 +131,10 @@ export default function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={handleOpen}
-        className="relative rounded-md p-2 text-slate-500 hover:bg-slate-100"
+        className="relative rounded-md p-1 text-txt-muted hover:text-txt-primary"
         aria-label="Notifications"
       >
-        <Bell size={18} />
+        <Bell size={16} />
         {unreadCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -143,13 +143,13 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-            <span className="text-sm font-medium text-ink">Notifications</span>
+        <div className="absolute right-0 mt-2 w-80 rounded-lg border border-hair bg-surface-1 py-1 shadow-lg">
+          <div className="flex items-center justify-between border-b border-hair px-3 py-2">
+            <span className="text-sm font-medium text-txt-primary">Notifications</span>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs font-medium text-primary hover:underline"
+                className="text-xs font-medium text-accentblue hover:underline"
               >
                 Mark all as read
               </button>
@@ -158,7 +158,7 @@ export default function NotificationBell() {
 
           <div className="max-h-80 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-slate-400">
+              <p className="px-3 py-6 text-center text-sm text-txt-muted">
                 No notifications yet.
               </p>
             ) : (
@@ -166,12 +166,12 @@ export default function NotificationBell() {
                 <div
                   key={n.id}
                   onClick={() => handleView(n)}
-                  className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${n.is_read ? "text-slate-500" : "bg-primary/5 text-ink"
+                  className={`flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-surface-2 ${n.is_read ? "text-txt-muted" : "bg-accentblue-soft text-txt-primary"
                     }`}
                 >
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate">{n.message}</span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-txt-muted">
                       {new Date(n.created_at).toLocaleString()}
                     </span>
                   </div>
@@ -181,7 +181,7 @@ export default function NotificationBell() {
                         e.stopPropagation();
                         handleView(n);
                       }}
-                      className="shrink-0 text-xs font-medium text-primary hover:underline"
+                      className="shrink-0 text-xs font-medium text-accentblue hover:underline"
                     >
                       View
                     </button>

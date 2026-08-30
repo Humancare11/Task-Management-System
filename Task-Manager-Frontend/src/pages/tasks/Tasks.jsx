@@ -6,9 +6,13 @@ import {
   ArrowUpDown,
   Users,
   CalendarClock,
+  CalendarRange,
+  Columns3,
+  List,
   Check,
 } from "lucide-react";
 import AppLayout from "../../components/layout/AppLayout.jsx";
+import PageHeader from "../../components/ui/PageHeader.jsx";
 import EmptyState from "../../components/common/EmptyState.jsx";
 import ErrorState from "../../components/common/ErrorState.jsx";
 import Spinner from "../../components/common/Spinner.jsx";
@@ -27,10 +31,12 @@ import { canCreateTask } from "../../config/permissions.js";
 const STATUS_OPTIONS = ["todo", "in_progress", "review", "completed"];
 const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"];
 
+// Timeline is intentionally disabled — timeline functionality is planned for a
+// future implementation. Do not wire it up or add mock data here.
 const VIEW_TABS = [
-  { key: "kanban", label: "Kanban" },
-  { key: "list", label: "List" },
-  { key: "timeline", label: "Timeline" },
+  { key: "kanban", label: "Kanban", icon: Columns3 },
+  { key: "list", label: "List", icon: List },
+  { key: "timeline", label: "Timeline", icon: CalendarRange, disabled: true },
 ];
 
 const COLUMNS = [
@@ -50,10 +56,10 @@ const SORT_OPTIONS = [
 const PRIORITY_WEIGHT = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 const selectClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
 
 const toolbarButtonClass =
-  "inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50";
+  "inline-flex items-center gap-1.5 rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm font-medium text-txt-muted transition-colors hover:bg-surface-2 hover:text-txt-primary";
 
 export default function Tasks() {
   const { user } = useAuth();
@@ -247,16 +253,10 @@ export default function Tasks() {
 
         {!loading && !error && tasks.length > 0 && (
           <>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="font-display text-lg font-semibold text-ink">
-                    Task Design
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Manage and track your team's project tasks
-                  </p>
-                </div>
+            <PageHeader
+              title="Tasks"
+              description="Manage and track your team's project tasks"
+              actions={
                 <div ref={addMenuRef} className="relative">
                   <Button
                     icon={Plus}
@@ -273,8 +273,8 @@ export default function Tasks() {
                     Add New Task
                   </Button>
                   {addMenuOpen && (
-                    <div className="absolute right-0 z-20 mt-2 w-64 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-                      <p className="px-2.5 py-1.5 text-xs font-medium text-slate-400">
+                    <div className="absolute right-0 z-20 mt-2 w-64 max-h-72 overflow-y-auto rounded-xl border border-hair bg-surface-1 p-1.5 shadow-lg">
+                      <p className="px-2.5 py-1.5 text-xs font-medium text-txt-muted">
                         Choose a project
                       </p>
                       {projects.map((p) => (
@@ -282,7 +282,7 @@ export default function Tasks() {
                           key={p.id}
                           type="button"
                           onClick={() => openTaskModalForProject(p.id)}
-                          className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+                          className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
                         >
                           {p.name}
                         </button>
@@ -290,28 +290,47 @@ export default function Tasks() {
                     </div>
                   )}
                 </div>
-              </div>
+              }
+            />
 
-              <div
-                ref={toolbarRef}
-                className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1">
-                  {VIEW_TABS.map((tab) => (
+            <div
+              ref={toolbarRef}
+              className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              {/* Segmented view switcher. Timeline stays visible but disabled
+                  until timeline functionality is built. */}
+              <div className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-hair bg-surface-1 p-0.5">
+                {VIEW_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = view === tab.key;
+                  return (
                     <button
                       key={tab.key}
                       type="button"
-                      onClick={() => setView(tab.key)}
-                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                        view === tab.key
-                          ? "bg-white text-ink shadow-sm"
-                          : "text-slate-500 hover:text-ink"
+                      disabled={tab.disabled}
+                      aria-pressed={isActive}
+                      onClick={() => {
+                        if (!tab.disabled) setView(tab.key);
+                      }}
+                      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                        isActive
+                          ? "bg-accentblue text-white shadow-sm"
+                          : tab.disabled
+                            ? "cursor-not-allowed text-txt-muted/50"
+                            : "text-txt-muted hover:text-txt-primary"
                       }`}
                     >
+                      <Icon size={14} />
                       {tab.label}
+                      {tab.disabled && (
+                        <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-txt-muted">
+                          Soon
+                        </span>
+                      )}
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative">
@@ -323,20 +342,20 @@ export default function Tasks() {
                       <Filter size={14} />
                       Filter
                       {activeFilterCount > 0 && (
-                        <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
+                        <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accentblue text-[10px] font-semibold text-white">
                           {activeFilterCount}
                         </span>
                       )}
                     </button>
                     {openMenu === "filter" && (
-                      <div className="absolute right-0 z-20 mt-2 w-72 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
+                      <div className="absolute right-0 z-20 mt-2 w-72 space-y-3 rounded-xl border border-hair bg-surface-1 p-4 shadow-lg">
                         <SearchInput
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
                           placeholder="Search tasks..."
                         />
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-500">
+                          <label className="mb-1 block text-xs font-medium text-txt-muted">
                             Status
                           </label>
                           <select
@@ -353,7 +372,7 @@ export default function Tasks() {
                           </select>
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-500">
+                          <label className="mb-1 block text-xs font-medium text-txt-muted">
                             Priority
                           </label>
                           <select
@@ -370,7 +389,7 @@ export default function Tasks() {
                           </select>
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-500">
+                          <label className="mb-1 block text-xs font-medium text-txt-muted">
                             Project
                           </label>
                           <select
@@ -390,7 +409,7 @@ export default function Tasks() {
                           <button
                             type="button"
                             onClick={clearFilters}
-                            className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                            className="text-xs font-medium text-accentblue hover:text-accentblue-hover"
                           >
                             Clear filters
                           </button>
@@ -409,7 +428,7 @@ export default function Tasks() {
                       Sort
                     </button>
                     {openMenu === "sort" && (
-                      <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+                      <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-hair bg-surface-1 p-1.5 shadow-lg">
                         {SORT_OPTIONS.map((opt) => (
                           <button
                             key={opt.key}
@@ -418,11 +437,11 @@ export default function Tasks() {
                               setSortBy(opt.key);
                               setOpenMenu(null);
                             }}
-                            className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+                            className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm text-txt-muted hover:bg-surface-2"
                           >
                             {opt.label}
                             {sortBy === opt.key && (
-                              <Check size={14} className="text-primary-600" />
+                              <Check size={14} className="text-accentblue" />
                             )}
                           </button>
                         ))}
@@ -445,7 +464,7 @@ export default function Tasks() {
                             .map(([key, assignee]) => (
                               <span
                                 key={key}
-                                className="ring-2 ring-white rounded-full"
+                                className="ring-2 ring-surface-1 rounded-full"
                               >
                                 <Avatar
                                   firstName={assignee.first_name}
@@ -458,25 +477,25 @@ export default function Tasks() {
                         </span>
                       )}
                       {uniqueAssignees.length > 3 && (
-                        <span className="text-xs font-medium text-slate-500">
+                        <span className="text-xs font-medium text-txt-muted">
                           +{uniqueAssignees.length - 3}
                         </span>
                       )}
                       <span className="hidden sm:inline">Assignees</span>
                     </button>
                     {openMenu === "assignees" && (
-                      <div className="absolute right-0 z-20 mt-2 w-56 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+                      <div className="absolute right-0 z-20 mt-2 w-56 max-h-72 overflow-y-auto rounded-xl border border-hair bg-surface-1 p-1.5 shadow-lg">
                         <button
                           type="button"
                           onClick={() => {
                             setAssigneeFilter("all");
                             setOpenMenu(null);
                           }}
-                          className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+                          className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm text-txt-muted hover:bg-surface-2"
                         >
                           All assignees
                           {assigneeFilter === "all" && (
-                            <Check size={14} className="text-primary-600" />
+                            <Check size={14} className="text-accentblue" />
                           )}
                         </button>
                         {uniqueAssignees.map(([key, assignee]) => (
@@ -487,7 +506,7 @@ export default function Tasks() {
                               setAssigneeFilter(key);
                               setOpenMenu(null);
                             }}
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-txt-muted hover:bg-surface-2"
                           >
                             <Avatar
                               firstName={assignee.first_name}
@@ -499,12 +518,12 @@ export default function Tasks() {
                               {assignee.first_name} {assignee.last_name}
                             </span>
                             {assigneeFilter === key && (
-                              <Check size={14} className="text-primary-600" />
+                              <Check size={14} className="text-accentblue" />
                             )}
                           </button>
                         ))}
                         {uniqueAssignees.length === 0 && (
-                          <p className="px-2.5 py-2 text-sm text-slate-400">
+                          <p className="px-2.5 py-2 text-sm text-txt-muted">
                             No assignees yet.
                           </p>
                         )}
@@ -513,7 +532,6 @@ export default function Tasks() {
                   </div>
                 </div>
               </div>
-            </div>
 
             {sortedTasks.length === 0 ? (
               <EmptyState
@@ -531,17 +549,17 @@ export default function Tasks() {
                         return (
                           <div
                             key={col.key}
-                            className="flex w-[280px] shrink-0 flex-col rounded-2xl bg-slate-100 p-3 sm:w-[300px]"
+                            className="flex w-[280px] shrink-0 flex-col rounded-2xl bg-surface-2 p-3 sm:w-[300px]"
                           >
                             <div className="mb-3 flex items-center justify-between px-1">
                               <div className="flex items-center gap-2">
                                 <span
                                   className={`h-2 w-2 rounded-full ${col.dot}`}
                                 />
-                                <span className="text-sm font-semibold text-ink">
+                                <span className="text-sm font-semibold text-txt-primary">
                                   {col.label}
                                 </span>
-                                <span className="rounded-full bg-white px-1.5 py-0.5 text-xs font-medium text-slate-500">
+                                <span className="rounded-full bg-surface-1 px-1.5 py-0.5 text-xs font-medium text-txt-muted">
                                   {String(columnTasks.length).padStart(2, "0")}
                                 </span>
                               </div>
@@ -549,14 +567,14 @@ export default function Tasks() {
                                 type="button"
                                 disabled
                                 title="Open a project to create a task."
-                                className="rounded-md p-1 text-slate-400 disabled:cursor-not-allowed"
+                                className="rounded-md p-1 text-txt-muted disabled:cursor-not-allowed"
                               >
                                 <Plus size={16} />
                               </button>
                             </div>
                             <div className="flex flex-col gap-3 overflow-y-auto">
                               {columnTasks.length === 0 ? (
-                                <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-center text-xs text-slate-400">
+                                <div className="rounded-xl border border-dashed border-hair bg-surface-1/60 p-4 text-center text-xs text-txt-muted">
                                   No tasks in this stage
                                 </div>
                               ) : (
@@ -577,29 +595,29 @@ export default function Tasks() {
                 )}
 
                 {view === "list" && (
-                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="overflow-hidden rounded-xl border border-hair bg-surface-1">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left">
-                        <thead className="border-b border-slate-200 bg-slate-50">
+                        <thead className="border-b border-hair bg-surface-2">
                           <tr>
-                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
-                              Title
+                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">
+                              Task
                             </th>
-                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">
                               Status
                             </th>
-                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">
                               Priority
                             </th>
-                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">
                               Assignee
                             </th>
-                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                            <th className="px-6 py-3 text-xs font-medium uppercase tracking-wide text-txt-muted">
                               Due Date
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-hair">
                           {sortedTasks.map((task) => (
                             <TaskRow
                               key={`${task.project_id}-${task.id}`}

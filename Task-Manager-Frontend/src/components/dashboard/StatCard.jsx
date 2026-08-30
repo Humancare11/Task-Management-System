@@ -1,16 +1,13 @@
-export default function StatCard({ icon: Icon, label, value, description }) {
+export default function StatCard({ label, value, description }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-500">{label}</span>
-        {Icon && (
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-            <Icon size={16} />
-          </span>
-        )}
-      </div>
-      <p className="mt-3 text-2xl font-display font-bold text-ink">{value}</p>
-      {description && <p className="mt-1.5 text-xs text-slate-400">{description}</p>}
+    <div className="px-5 py-4">
+      <span className="block text-[10px] font-semibold uppercase tracking-[0.07em] text-txt-muted">
+        {label}
+      </span>
+      <p className="mt-1.5 text-[20px] font-medium text-txt-primary">{value}</p>
+      {description && (
+        <p className="mt-1 text-[11px] leading-snug text-txt-muted">{description}</p>
+      )}
     </div>
   );
 }

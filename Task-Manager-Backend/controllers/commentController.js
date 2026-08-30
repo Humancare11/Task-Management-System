@@ -1,5 +1,6 @@
 const { Comment, Task, Subtask, Project, User, Attachment } = require("../models");
 const { createNotification } = require("../utils/notify");
+const { createActivity } = require("../utils/activity");
 const { getIO } = require("../socket");
 
 async function resolveContext(req) {
@@ -186,6 +187,23 @@ exports.createComment = async (req, res) => {
       console.error("Socket emit failed:", err.message);
     }
 
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: projectId,
+      task_id: task.id,
+      user_id: req.user.id,
+      entity_type: "comment",
+      entity_id: comment.id,
+      action: "created",
+      description: `Created comment on "${subtask ? subtask.title : task.title}"`,
+      metadata: {
+        comment_id: comment.id,
+        task_id: task.id,
+        project_id: projectId,
+        subtask_id: subtask ? subtask.id : null,
+      },
+    });
+
     return res.status(201).json({ message: "Comment created.", comment: serialized });
   } catch (error) {
     console.error("Create comment error:", error);
@@ -195,8 +213,8 @@ exports.createComment = async (req, res) => {
 
 exports.deleteComment = async (req, res) => {
   try {
-    const { taskId, commentId } = req.params;
-    const { error, subtask } = await resolveContext(req);
+    const { projectId, taskId, commentId } = req.params;
+    const { error, task, subtask } = await resolveContext(req);
     if (error) return res.status(error.status).json({ message: error.message });
 
     const comment = await Comment.findOne({
@@ -216,6 +234,7 @@ exports.deleteComment = async (req, res) => {
     }
 
     const deletedCommentId = comment.id;
+    const deletedCommentContent = comment.content;
     await comment.destroy();
 
     try {
@@ -224,6 +243,24 @@ exports.deleteComment = async (req, res) => {
     } catch (err) {
       console.error("Socket emit failed:", err.message);
     }
+
+    await createActivity({
+      organization_id: req.user.organization_id,
+      project_id: projectId,
+      task_id: taskId,
+      user_id: req.user.id,
+      entity_type: "comment",
+      entity_id: deletedCommentId,
+      action: "deleted",
+      description: `Deleted comment on "${subtask ? subtask.title : task.title}"`,
+      metadata: {
+        comment_id: deletedCommentId,
+        comment_content: deletedCommentContent,
+        task_id: taskId,
+        project_id: projectId,
+        subtask_id: subtask ? subtask.id : null,
+      },
+    });
 
     return res.json({ message: "Comment deleted." });
   } catch (error) {

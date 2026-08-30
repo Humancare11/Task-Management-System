@@ -54,18 +54,18 @@ export default function QuestionFormSidePanel({
 
       {/* Side Panel */}
       <div
-        className={`fixed top-0 right-0 h-screen w-full sm:w-[480px] bg-white shadow-xl flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-screen w-full sm:w-[480px] bg-surface-1 shadow-xl flex flex-col transition-transform duration-300 ease-in-out ${
           visible ? "translate-x-0" : "translate-x-full"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-ink">Ask a Question</h2>
+        <div className="flex items-center justify-between border-b border-hair px-5 py-4">
+          <h2 className="text-lg font-semibold text-txt-primary">Ask a Question</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-lg p-1.5 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
             aria-label="Close"
           >
             <svg

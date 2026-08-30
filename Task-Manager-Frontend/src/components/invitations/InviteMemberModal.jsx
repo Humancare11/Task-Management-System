@@ -10,10 +10,10 @@ const ROLE_OPTIONS = ["admin", "manager", "member", "client"];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const selectClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500";
+  "w-full rounded-lg border border-hair bg-surface-1 px-3 py-2 text-sm text-txt-primary placeholder:text-txt-muted focus:border-accentblue focus:outline-none focus:ring-1 focus:ring-accentblue";
 
 export default function InviteMemberModal({ open, onClose, onInvited }) {
   const toast = useToast();
@@ -89,14 +89,14 @@ export default function InviteMemberModal({ open, onClose, onInvited }) {
       >
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-medium text-ink">Invitation created successfully!</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm font-medium text-txt-primary">Invitation created successfully!</p>
+            <p className="mt-1 text-sm text-txt-muted">
               Share this invitation link with the invited user:
             </p>
           </div>
 
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-            <p className="min-w-0 flex-1 truncate px-1 text-sm text-ink">{invitationLink}</p>
+          <div className="flex items-center gap-2 rounded-lg border border-hair bg-surface-2 p-2">
+            <p className="min-w-0 flex-1 truncate px-1 text-sm text-txt-primary">{invitationLink}</p>
             <Button
               variant="secondary"
               size="sm"
@@ -116,7 +116,7 @@ export default function InviteMemberModal({ open, onClose, onInvited }) {
     <Modal
       open={open}
       onClose={handleClose}
-      title="Invite Team Member"
+      title="Invite Member"
       footer={
         <>
           <Button variant="secondary" onClick={handleClose} disabled={submitting}>
@@ -129,8 +129,11 @@ export default function InviteMemberModal({ open, onClose, onInvited }) {
       }
     >
       <div className="space-y-4">
+        <p className="-mt-2 text-sm text-txt-muted">
+          Invite a teammate to join your organization.
+        </p>
         <div>
-          <label htmlFor="invite-email" className="mb-1.5 block text-sm font-medium text-ink">
+          <label htmlFor="invite-email" className="mb-1.5 block text-sm font-medium text-txt-primary">
             Email
           </label>
           <input
@@ -148,7 +151,7 @@ export default function InviteMemberModal({ open, onClose, onInvited }) {
         </div>
 
         <div>
-          <label htmlFor="invite-role" className="mb-1.5 block text-sm font-medium text-ink">
+          <label htmlFor="invite-role" className="mb-1.5 block text-sm font-medium text-txt-primary">
             Role
           </label>
           <select
