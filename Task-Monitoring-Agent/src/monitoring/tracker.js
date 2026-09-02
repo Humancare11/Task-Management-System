@@ -2,7 +2,8 @@
 //
 // Every config.activityPollIntervalSeconds:
 //   1. Detect the active window (application_name + window_title).
-//   2. Detect system idle time (seconds since last keyboard/mouse input).
+//   2. Detect physical display power. The user counts as "idle" only when the
+//      display is OFF — never for a lack of keyboard/mouse input while it is on.
 //   3. Feed both to the session tracker.
 //   4. When a session ends, buffer the completed activity and submit the buffer.
 //   5. Also submit when the buffer reaches config.activityBufferMaxSize.
@@ -13,7 +14,7 @@
 const { buildConfig, validateConfig } = require("../config/config");
 const { getActiveWindow } = require("./activeWindow");
 const { getActiveDomain } = require("./domainDetector");
-const { getIdleSeconds } = require("./idleTime");
+const { getScreenState } = require("./screenState");
 const { ActivitySessionTracker } = require("./activitySession");
 const { ActivityReporter } = require("./activityReporter");
 const logger = require("../utils/logger");
@@ -25,19 +26,18 @@ async function tick(session, reporter, config) {
     if (running) return; // avoid overlap if a poll runs long
     running = true;
     try {
-        const [sample, idleSeconds] = await Promise.all([
+        const [sample, screen] = await Promise.all([
             getActiveWindow(),
-            getIdleSeconds(),
+            getScreenState(),
         ]);
         const now = new Date();
 
-        const idle = {
-            idleSeconds: Number.isFinite(idleSeconds) ? idleSeconds : 0,
-            thresholdSeconds: config.idleThresholdSeconds,
-        };
-        const idleNow =
-            idle.thresholdSeconds > 0 &&
-            idle.idleSeconds >= idle.thresholdSeconds;
+        // "Idle" means one thing only: the physical display is OFF. No
+        // keyboard/mouse-inactivity timer, no lock or screensaver check — a long
+        // meeting, reading session, or presentation with the display on keeps
+        // the foreground app tracked. Display off -> idle; display on -> resume.
+        const idleNow = screen.displayOff;
+        const idle = { isIdle: idleNow };
 
         // Enrich the active-window sample with the website/domain when the
         // foreground application is a supported browser and the user is active.
@@ -61,17 +61,19 @@ async function tick(session, reporter, config) {
         const isIdleNow = idleNow;
 
         if (!wasIdle && isIdleNow) {
-            logger.info(`User idle detected (>= ${idle.thresholdSeconds}s without input)`);
+            logger.info("Display turned off — pausing activity tracking.");
         } else if (wasIdle && !isIdleNow) {
-            logger.info("User activity resumed");
+            logger.info("Display turned on — resuming activity tracking.");
         } else if (!isIdleNow && activeSample) {
             const previous = session.describeCurrent();
             const prevDomain = (previous && previous.domain) || null;
+            // Mirrors sameActivity() in activitySession.js: a bare window-title
+            // change keeps the same session, so it must not be logged as a new
+            // "Active application".
             const isNew =
                 !previous ||
                 previous.type !== "application" ||
                 previous.applicationName !== activeSample.applicationName ||
-                previous.windowTitle !== activeSample.windowTitle ||
                 (activeSample.domain && activeSample.domain !== prevDomain);
 
             if (isNew) {
@@ -88,7 +90,7 @@ async function tick(session, reporter, config) {
         if (completed) {
             logger.info("Activity completed");
             logger.info(`Type: ${completed.activity_type}`);
-            if (completed.activity_type === "application") {
+            if (completed.activity_type !== "idle") {
                 logger.info(`Application: ${completed.application_name}`);
                 if (completed.domain) {
                     logger.info(`Website: ${completed.domain}`);
@@ -116,7 +118,7 @@ function startActivityTracking(providedConfig) {
 
     logger.info(
         `Activity tracking started (poll every ${config.activityPollIntervalSeconds}s, ` +
-        `buffer ${config.activityBufferMaxSize}, idle threshold ${config.idleThresholdSeconds}s)`,
+        `buffer ${config.activityBufferMaxSize}, idle = display off)`,
     );
 
     tick(session, reporter, config);
@@ -135,7 +137,7 @@ function startActivityTracking(providedConfig) {
         if (completed) {
             logger.info("Activity completed (shutdown)");
             logger.info(`Type: ${completed.activity_type}`);
-            if (completed.activity_type === "application") {
+            if (completed.activity_type !== "idle") {
                 logger.info(`Application: ${completed.application_name}`);
                 if (completed.domain) {
                     logger.info(`Website: ${completed.domain}`);

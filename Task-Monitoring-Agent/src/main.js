@@ -47,7 +47,7 @@ const { setAutoStart, isAutoStartEnabled, launchedHidden } = require("./autostar
 const logger = require("./utils/logger");
 
 const DEFAULT_API_BASE_URL =
-  "https://task-management-system-production-fc7b.up.railway.app/api";
+  "https://darkviolet-cobra-939760.hostingersite.com/api";
 
 let mainWindow = null;
 let tray = null;

@@ -44,14 +44,17 @@ export function formatDateTime(value) {
   });
 }
 
-// "02h 35m" style, used for tracked durations.
+// Human-readable tracked duration. Shows real precision instead of collapsing
+// everything under a minute to "<1m":
+//   < 1 min   -> "45s"
+//   < 1 hour  -> "12m"
+//   >= 1 hour -> "1h 15m"
 export function formatHm(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (total < 60) return `${total}s`;
   const mins = Math.floor(total / 60);
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h === 0 && m === 0) return total > 0 ? "<1m" : "0m";
-  return `${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m`;
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
 export function formatRelative(value) {
@@ -158,4 +161,92 @@ export function summarise(groups, activities) {
     todayActivities,
     todaySeconds,
   };
+}
+
+// Collapse one employee's raw activity rows into the breakdown the drawer
+// renders: one entry per application (duration summed), each browser application
+// immediately followed by a per-website entry for every domain seen under it,
+// and a single "Idle" entry last. This turns dozens of individual sub-minute
+// rows into:
+//   Chrome      45m
+//     gmail.com     18m
+//     youtube.com   12m
+//     github.com     5m
+//   VS Code   1h 20m
+//   Idle         20m
+//
+// Website activity is detected by the presence of `a.domain`, so it works both
+// for rows the agent tags "website" and for older rows tagged "application"
+// that still carry a domain.
+//
+// Pure and side-effect free — it does not mutate the input and is independent
+// of groupByEmployee / summarise, so employee grouping, filters and the
+// active/idle totals are unaffected.
+export function groupByApplication(activities) {
+  const apps = new Map(); // appKey -> app / idle entry
+  const sitesByApp = new Map(); // appKey -> Map(domain -> website entry)
+
+  (activities || []).forEach((a) => {
+    const isIdle = a.activity_type === "idle";
+    const secs = Number(a.duration_seconds) || 0;
+    const label = isIdle
+      ? TYPE_META.idle.label
+      : a.application_name || a.domain || "Unknown";
+    // Prefixed so a real application literally named "Idle" can never collide
+    // with the idle bucket.
+    const appKey = isIdle ? "idle:" : `app:${label}`;
+
+    if (!apps.has(appKey)) {
+      apps.set(appKey, {
+        key: appKey,
+        label,
+        activityType: isIdle ? "idle" : "application",
+        totalSeconds: 0,
+        sessions: 0,
+      });
+    }
+    const app = apps.get(appKey);
+    app.totalSeconds += secs;
+    app.sessions += 1;
+
+    // Any non-idle row carrying a domain is website activity.
+    if (!isIdle && a.domain) {
+      if (!sitesByApp.has(appKey)) sitesByApp.set(appKey, new Map());
+      const siteMap = sitesByApp.get(appKey);
+      if (!siteMap.has(a.domain)) {
+        siteMap.set(a.domain, {
+          key: `${appKey}::site:${a.domain}`,
+          label: a.domain,
+          activityType: "website",
+          totalSeconds: 0,
+          sessions: 0,
+        });
+      }
+      const site = siteMap.get(a.domain);
+      site.totalSeconds += secs;
+      site.sessions += 1;
+    }
+  });
+
+  const byTimeDesc = (x, y) =>
+    y.totalSeconds - x.totalSeconds || x.label.localeCompare(y.label);
+
+  const result = [];
+  Array.from(apps.values())
+    .filter((e) => e.activityType !== "idle")
+    .sort(byTimeDesc)
+    .forEach((app) => {
+      result.push(app);
+      const siteMap = sitesByApp.get(app.key);
+      if (siteMap) {
+        Array.from(siteMap.values())
+          .sort(byTimeDesc)
+          .forEach((site) => result.push(site));
+      }
+    });
+
+  const idle = apps.get("idle:");
+  if (idle) result.push(idle);
+
+  return result;
 }

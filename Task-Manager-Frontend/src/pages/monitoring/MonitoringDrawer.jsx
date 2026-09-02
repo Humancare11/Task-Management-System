@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Lock, AppWindow, Globe, Moon } from "lucide-react";
 import Avatar from "../../components/ui/Avatar.jsx";
 import Badge from "../../components/ui/Badge.jsx";
@@ -7,6 +7,7 @@ import {
   formatClock,
   formatDate,
   formatHm,
+  groupByApplication,
   TYPE_META,
 } from "./monitoringUtils.js";
 
@@ -58,6 +59,12 @@ export default function MonitoringDrawer({ group, onClose }) {
     const t = setTimeout(() => setShouldRender(false), 300);
     return () => clearTimeout(t);
   }, [open, group]);
+
+  // One row per application with duration_seconds summed (Issue #3).
+  const appBreakdown = useMemo(
+    () => groupByApplication(shown?.activities),
+    [shown],
+  );
 
   if (!shouldRender || !shown) return null;
 
@@ -132,41 +139,46 @@ export default function MonitoringDrawer({ group, onClose }) {
 
           <section>
             <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-txt-muted">
-              Activity ({shown.activities.length})
+              Applications ({appBreakdown.length})
             </h3>
-            <ul className="space-y-2">
-              {shown.activities.map((a) => {
-                const meta = TYPE_META[a.activity_type] || TYPE_META.idle;
-                const Icon = TYPE_ICON[a.activity_type] || Moon;
-                return (
-                  <li
-                    key={a.id}
-                    className="rounded-lg border border-hair bg-surface-2/60 p-3"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-txt-primary">
-                        <Icon size={13} className="text-txt-muted" />
-                        {a.application_name || a.domain || meta.label}
-                      </span>
-                      <span className="text-[11px] text-txt-muted">
-                        {formatClock(a.started_at)} – {formatClock(a.ended_at)}
-                      </span>
-                    </div>
-                    {a.window_title && (
-                      <p className="mt-1 truncate text-[11px] text-txt-muted">
-                        {a.window_title}
-                      </p>
-                    )}
-                    <div className="mt-1 flex items-center gap-2">
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
-                      <span className="text-[11px] text-txt-muted">
-                        {formatHm(a.duration_seconds)}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            {appBreakdown.length === 0 ? (
+              <p className="text-xs text-txt-muted">
+                No application activity in range.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {appBreakdown.map((app) => {
+                  const meta = TYPE_META[app.activityType] || TYPE_META.idle;
+                  const Icon = TYPE_ICON[app.activityType] || Moon;
+                  const isWebsite = app.activityType === "website";
+                  return (
+                    <li
+                      key={app.key}
+                      className={`rounded-lg border border-hair bg-surface-2/60 p-3 ${
+                        isWebsite ? "ml-4" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-txt-primary">
+                          <Icon size={13} className="shrink-0 text-txt-muted" />
+                          <span className="truncate">{app.label}</span>
+                        </span>
+                        <span className="shrink-0 text-xs font-semibold text-txt-primary">
+                          {formatHm(app.totalSeconds)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <Badge tone={meta.tone}>{meta.label}</Badge>
+                        <span className="text-[11px] text-txt-muted">
+                          {app.sessions}{" "}
+                          {app.sessions === 1 ? "session" : "sessions"}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
 
           <section className="space-y-3">
