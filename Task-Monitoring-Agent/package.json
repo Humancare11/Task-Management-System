@@ -8,7 +8,7 @@
     "start": "electron .",
     "heartbeat": "node src/runHeartbeat.js",
     "agent": "node src/runAgent.js",
-    "test:agent": "node test/agent.test.js",
+    "test": "node --test \"test/**/*.test.js\"",
     "build": "electron-builder"
   },
   "devDependencies": {

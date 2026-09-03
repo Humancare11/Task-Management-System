@@ -6,8 +6,12 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon index.js",
-    "migrate": "sequelize-cli db:migrate --env production",
-    "start": "npm run migrate && node index.js"
+    "migrate": "sequelize-cli db:migrate",
+    "migrate:undo": "sequelize-cli db:migrate:undo",
+    "migrate:status": "sequelize-cli db:migrate:status",
+    "migrate:prod": "sequelize-cli db:migrate --env production",
+    "start": "npm run migrate:prod && node scripts/start.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

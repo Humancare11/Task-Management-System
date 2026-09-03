@@ -34,6 +34,12 @@ async function sendHeartbeat(config) {
             status: 200,
             kind: "ok",
             agent: result.data && result.data.agent ? result.data.agent : null,
+            // §5b signal: { active, legal_gate_open, org_enabled, consent_required,
+            // consented, document_version }. Absent on older backends.
+            contentCapture:
+                result.data && result.data.content_capture
+                    ? result.data.content_capture
+                    : null,
         };
     }
 

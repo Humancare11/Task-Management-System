@@ -18,6 +18,21 @@ const MonitoringEnrollment = require("./MonitoringEnrollment");
 const MonitoringActivity = require("./MonitoringActivity");
 const Activity = require("./Activity");
 
+// Monitoring events pipeline (Phase 0).
+const MonitoringEvent = require("./MonitoringEvent");
+const MonitoringPcSession = require("./MonitoringPcSession");
+const MonitoringInterval = require("./MonitoringInterval");
+const MonitoringAppSession = require("./MonitoringAppSession");
+const MonitoringWebSession = require("./MonitoringWebSession");
+const MonitoringUserDaySummary = require("./MonitoringUserDaySummary");
+const MonitoringRecomputeQueue = require("./MonitoringRecomputeQueue");
+const MonitoringOrgSetting = require("./MonitoringOrgSetting");
+const MonitoringBlocklistDomain = require("./MonitoringBlocklistDomain");
+const MonitoringConsent = require("./MonitoringConsent");
+const MonitoringContentEvent = require("./MonitoringContentEvent");
+const MonitoringContentGrant = require("./MonitoringContentGrant");
+const MonitoringContentAccessLog = require("./MonitoringContentAccessLog");
+
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
   foreignKey: "user_id",
@@ -663,6 +678,76 @@ Activity.belongsTo(User, {
   as: "user",
 });
 
+// ---------------------------------------------------------------------------
+// Monitoring events pipeline (Phase 0)
+// ---------------------------------------------------------------------------
+
+// MonitoringEvent (append-only raw stream)
+Organization.hasMany(MonitoringEvent, { foreignKey: "organization_id", as: "monitoringEvents" });
+MonitoringEvent.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+User.hasMany(MonitoringEvent, { foreignKey: "user_id", as: "monitoringEvents" });
+MonitoringEvent.belongsTo(User, { foreignKey: "user_id", as: "user" });
+MonitoringAgent.hasMany(MonitoringEvent, { foreignKey: "agent_id", as: "events" });
+MonitoringEvent.belongsTo(MonitoringAgent, { foreignKey: "agent_id", as: "agent" });
+
+// MonitoringPcSession (derived, per device-day)
+Organization.hasMany(MonitoringPcSession, { foreignKey: "organization_id", as: "monitoringPcSessions" });
+MonitoringPcSession.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+User.hasMany(MonitoringPcSession, { foreignKey: "user_id", as: "monitoringPcSessions" });
+MonitoringPcSession.belongsTo(User, { foreignKey: "user_id", as: "user" });
+MonitoringAgent.hasMany(MonitoringPcSession, { foreignKey: "agent_id", as: "pcSessions" });
+MonitoringPcSession.belongsTo(MonitoringAgent, { foreignKey: "agent_id", as: "agent" });
+
+// MonitoringPcSession ↔ its derived children
+MonitoringPcSession.hasMany(MonitoringInterval, { foreignKey: "pc_session_id", as: "intervals" });
+MonitoringInterval.belongsTo(MonitoringPcSession, { foreignKey: "pc_session_id", as: "pcSession" });
+MonitoringPcSession.hasMany(MonitoringAppSession, { foreignKey: "pc_session_id", as: "appSessions" });
+MonitoringAppSession.belongsTo(MonitoringPcSession, { foreignKey: "pc_session_id", as: "pcSession" });
+MonitoringPcSession.hasMany(MonitoringWebSession, { foreignKey: "pc_session_id", as: "webSessions" });
+MonitoringWebSession.belongsTo(MonitoringPcSession, { foreignKey: "pc_session_id", as: "pcSession" });
+
+// MonitoringUserDaySummary (derived, per user-day)
+Organization.hasMany(MonitoringUserDaySummary, { foreignKey: "organization_id", as: "monitoringUserDaySummaries" });
+MonitoringUserDaySummary.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+User.hasMany(MonitoringUserDaySummary, { foreignKey: "user_id", as: "monitoringDaySummaries" });
+MonitoringUserDaySummary.belongsTo(User, { foreignKey: "user_id", as: "user" });
+
+// MonitoringRecomputeQueue
+MonitoringAgent.hasMany(MonitoringRecomputeQueue, { foreignKey: "agent_id", as: "recomputeQueueEntries" });
+MonitoringRecomputeQueue.belongsTo(MonitoringAgent, { foreignKey: "agent_id", as: "agent" });
+
+// MonitoringOrgSetting (one per org)
+Organization.hasOne(MonitoringOrgSetting, { foreignKey: "organization_id", as: "monitoringSettings" });
+MonitoringOrgSetting.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+
+// MonitoringConsent
+Organization.hasMany(MonitoringConsent, { foreignKey: "organization_id", as: "monitoringConsents" });
+MonitoringConsent.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+User.hasMany(MonitoringConsent, { foreignKey: "user_id", as: "monitoringConsents" });
+MonitoringConsent.belongsTo(User, { foreignKey: "user_id", as: "user" });
+
+// MonitoringContentEvent (encrypted; inert until Phase 4)
+Organization.hasMany(MonitoringContentEvent, { foreignKey: "organization_id", as: "monitoringContentEvents" });
+MonitoringContentEvent.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+User.hasMany(MonitoringContentEvent, { foreignKey: "user_id", as: "monitoringContentEvents" });
+MonitoringContentEvent.belongsTo(User, { foreignKey: "user_id", as: "user" });
+MonitoringAgent.hasMany(MonitoringContentEvent, { foreignKey: "agent_id", as: "contentEvents" });
+MonitoringContentEvent.belongsTo(MonitoringAgent, { foreignKey: "agent_id", as: "agent" });
+
+// MonitoringContentGrant (inert until Phase 4)
+Organization.hasMany(MonitoringContentGrant, { foreignKey: "organization_id", as: "monitoringContentGrants" });
+MonitoringContentGrant.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+User.hasMany(MonitoringContentGrant, { foreignKey: "grantee_user_id", as: "monitoringContentGrantsHeld" });
+MonitoringContentGrant.belongsTo(User, { foreignKey: "grantee_user_id", as: "grantee" });
+MonitoringContentGrant.belongsTo(User, { foreignKey: "granted_by_user_id", as: "grantedBy" });
+MonitoringContentGrant.belongsTo(User, { foreignKey: "target_user_id", as: "targetUser" });
+
+// MonitoringContentAccessLog (inert until Phase 4)
+Organization.hasMany(MonitoringContentAccessLog, { foreignKey: "organization_id", as: "monitoringContentAccessLogs" });
+MonitoringContentAccessLog.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+MonitoringContentAccessLog.belongsTo(User, { foreignKey: "viewer_user_id", as: "viewer" });
+MonitoringContentAccessLog.belongsTo(User, { foreignKey: "target_user_id", as: "targetUser" });
+
 module.exports = {
   User,
   Organization,
@@ -682,5 +767,18 @@ module.exports = {
   MonitoringAgent,
   MonitoringEnrollment,
   MonitoringActivity,
-    Activity,
+  Activity,
+  MonitoringEvent,
+  MonitoringPcSession,
+  MonitoringInterval,
+  MonitoringAppSession,
+  MonitoringWebSession,
+  MonitoringUserDaySummary,
+  MonitoringRecomputeQueue,
+  MonitoringOrgSetting,
+  MonitoringBlocklistDomain,
+  MonitoringConsent,
+  MonitoringContentEvent,
+  MonitoringContentGrant,
+  MonitoringContentAccessLog,
 };

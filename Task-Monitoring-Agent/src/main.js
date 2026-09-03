@@ -30,29 +30,48 @@
 // is never logged, never shown in the tray, never returned to the renderer.
 
 const path = require("path");
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, powerMonitor } = require("electron");
 
 const { buildConfig, validateConfig } = require("./config/config");
 const { sendHeartbeat } = require("./auth/agentAuth");
 const { startHeartbeatLoop, stopHeartbeatLoop } = require("./heartbeat");
 const { startActivityTracking } = require("./monitoring/tracker");
 const {
+    initEventPipeline,
+    startEventFlush,
+    shutdownEventPipeline,
+    discardEventPipeline,
+    emitEvent,
+    isInitialised: eventPipelineReady,
+} = require("./monitoring/eventPipeline");
+const {
+    initContentPipeline,
+    startContentFlush,
+    shutdownContentPipeline,
+    setActive: setContentActive,
+    updateContentConfig,
+} = require("./monitoring/contentPipeline");
+const contentCaptureRunner = require("./monitoring/contentCaptureRunner");
+const { postConsent } = require("./api/contentClient");
+const {
     loadSecureConfig,
     saveSecureConfig,
     clearSecureConfig,
     encryptionAvailable,
 } = require("./storage/secureConfig");
+const consentStore = require("./storage/consentStore");
 const { createTray } = require("./tray");
 const { setAutoStart, isAutoStartEnabled, launchedHidden } = require("./autostart");
 const logger = require("./utils/logger");
 
 const DEFAULT_API_BASE_URL =
-  "https://darkviolet-cobra-939760.hostingersite.com/api";
+  "https://localhost:5000/api";
 
 let mainWindow = null;
 let tray = null;
 let monitoring = null; // handle from startActivityTracking()
 let monitoringStarted = false;
+let powerMonitorWired = false;
 let connectedAgent = null; // { agent_uuid, status, last_seen_at } from heartbeat
 let connectedDeviceName = null;
 let connectedApiBaseUrl = null;
@@ -164,21 +183,143 @@ function setTrayState(state) {
 function startMonitoring(config) {
     if (monitoringStarted) return;
     validateConfig(config);
-    startHeartbeatLoop(config, (kind) => {
+
+    // Events pipeline first, so agent_start and the first events are captured
+    // even if heartbeat/activity startup logs something. Fully skipped when
+    // disabled — the legacy heartbeat + /activities path is unchanged.
+    if (config.eventsPipelineEnabled) {
+        try {
+            initEventPipeline({
+                dataDir: path.join(app.getPath("userData"), "events"),
+                config,
+            });
+            startEventFlush();
+        } catch (err) {
+            logger.error(`Event pipeline failed to start: ${err.message}`);
+        }
+    }
+
+    // §5b content pipeline — always initialised, always INACTIVE until a
+    // heartbeat says otherwise. Nothing is captured or queued while inactive.
+    try {
+        initContentPipeline({ config });
+        startContentFlush();
+    } catch (err) {
+        logger.error(`Content pipeline failed to start: ${err.message}`);
+    }
+
+    startHeartbeatLoop(config, (kind, result) => {
         if (!monitoringStarted) return;
         if (kind === "ok") setTrayState("MONITORING");
         else if (kind === "auth") setTrayState("AUTHENTICATION_FAILED");
         else if (kind === "network" || kind === "http") setTrayState("NETWORK_UNAVAILABLE");
+        applyContentSignal(config, result && result.contentCapture);
     });
     monitoring = startActivityTracking(config);
     monitoringStarted = true;
     connectedApiBaseUrl = config.apiBaseUrl;
+    if (config.eventsPipelineEnabled) wirePowerMonitor();
     setTrayState("MONITORING");
     logger.info("Monitoring started (heartbeat + activity tracking).");
 }
 
+// The heartbeat's content_capture signal:
+//   { active, legal_gate_open, org_enabled, consent_required, consented, document_version }
+// active === true  <=> legal gate open AND org enabled AND consent row on file.
+// This is the ONLY thing that turns capture on. While the legal flag is false
+// the server always sends active:false, so nothing here ever activates.
+let lastConsentPromptedVersion = null;
+function applyContentSignal(config, signal) {
+    if (!signal || !signal.active) {
+        if (setContentActive) setContentActive(false);
+        contentCaptureRunner.stop();
+
+        // Org wants it, legal gate open, but this employee hasn't consented yet:
+        // show the consent screen once per document version.
+        if (
+            signal &&
+            signal.legal_gate_open &&
+            signal.org_enabled &&
+            signal.consent_required &&
+            !signal.consented &&
+            signal.document_version &&
+            lastConsentPromptedVersion !== signal.document_version &&
+            !consentStore.hasConsentFor(signal.document_version)
+        ) {
+            lastConsentPromptedVersion = signal.document_version;
+            promptForConsent(signal.document_version);
+        }
+        return;
+    }
+
+    // signal.active === true — server has a consent row for this user.
+    if (signal.document_version && !consentStore.hasConsentFor(signal.document_version)) {
+        // Cache locally so we don't re-prompt; server is source of truth.
+        try {
+            consentStore.saveConsent(signal.document_version);
+        } catch {
+            /* non-fatal */
+        }
+    }
+    updateContentConfig(config);
+    setContentActive(true);
+    contentCaptureRunner.start(config);
+}
+
+function promptForConsent(documentVersion) {
+    logger.info(`Content capture consent required (document ${documentVersion}). Showing consent screen.`);
+    showWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("content:consentRequired", { documentVersion });
+    }
+}
+
+// Electron powerMonitor lives in the main process only (no headless equivalent).
+// Lock / unlock / suspend / resume are folded into the screen_state stream by
+// the activity tracker's screen reducer. Listeners are attached once and simply
+// no-op after monitoring stops (monitoring?.notifyPowerState is gone).
+function wirePowerMonitor() {
+    if (powerMonitorWired) return;
+    powerMonitorWired = true;
+
+    const relay = (patch) => {
+        try {
+            if (monitoring && typeof monitoring.notifyPowerState === "function") {
+                monitoring.notifyPowerState(patch);
+            }
+        } catch (err) {
+            logger.warn(`powerMonitor relay failed: ${err.message}`);
+        }
+    };
+
+    powerMonitor.on("lock-screen", () => {
+        logger.info("powerMonitor: session locked.");
+        relay({ locked: true });
+    });
+    powerMonitor.on("unlock-screen", () => {
+        logger.info("powerMonitor: session unlocked.");
+        relay({ locked: false });
+    });
+    powerMonitor.on("suspend", () => {
+        logger.info("powerMonitor: machine suspending.");
+        relay({ suspended: true });
+    });
+    powerMonitor.on("resume", () => {
+        logger.info("powerMonitor: machine resumed.");
+        relay({ suspended: false });
+    });
+    // Windows delivers shutdown/restart via app "session-end" (handled below);
+    // this listener is a harmless no-op there and covers other platforms.
+    powerMonitor.on("shutdown", () => {
+        logger.info("powerMonitor: system shutting down.");
+    });
+
+    logger.info("powerMonitor wired (lock / unlock / suspend / resume).");
+}
+
 async function stopMonitoring() {
     stopHeartbeatLoop();
+    contentCaptureRunner.stop();
     if (monitoring) {
         try {
             await monitoring.stopActivityTracking();
@@ -187,11 +328,29 @@ async function stopMonitoring() {
         }
         monitoring = null;
     }
+    // Emit agent_stop and try one last flush of anything buffered.
+    try {
+        await shutdownEventPipeline({ reason: "monitoring_stopped" });
+    } catch {
+        /* best effort */
+    }
+    // Flush + clear the in-memory content queue (drops any unsent plaintext).
+    try {
+        await shutdownContentPipeline();
+    } catch {
+        /* best effort */
+    }
     monitoringStarted = false;
 }
 
 async function handleReconfigure() {
     await stopMonitoring();
+    // Credentials may now belong to a different agent enrolment — drop any
+    // events still queued under the old identity.
+    discardEventPipeline();
+    // Consent is per-employee; a reconfigure may switch employees.
+    consentStore.clearConsent();
+    lastConsentPromptedVersion = null;
     clearSecureConfig();
     connectedAgent = null;
     connectedDeviceName = null;
@@ -299,6 +458,46 @@ ipcMain.handle("agent:connect", async (_event, payload) => {
 
 ipcMain.handle("agent:reconfigure", async () => handleReconfigure());
 
+// -------------------------------------------------------------------- §5b consent
+
+ipcMain.handle("content:getConsentState", () => {
+    const pending = lastConsentPromptedVersion;
+    return {
+        pendingDocumentVersion:
+            pending && !consentStore.hasConsentFor(pending) ? pending : null,
+        accepted: consentStore.loadConsent(),
+    };
+});
+
+// The renderer's consent screen calls this when the employee accepts. We record
+// it with the server FIRST (that row is what actually authorises capture), then
+// cache locally. Capture still only starts on the next heartbeat that returns
+// active:true.
+ipcMain.handle("content:acceptConsent", async (_event, payload) => {
+    const documentVersion = String((payload && payload.documentVersion) || "").trim();
+    if (!documentVersion) return { ok: false, code: "missing_version" };
+
+    const secure = loadSecureConfig();
+    if (!secure) return { ok: false, code: "not_connected" };
+    const config = buildConfig(secure);
+
+    const res = await postConsent(config, { documentVersion, method: "agent" });
+    if (res.kind === "mismatch") {
+        return { ok: false, code: "version_mismatch", expected: res.expected };
+    }
+    if (res.kind !== "ok") {
+        return { ok: false, code: res.kind || "failed" };
+    }
+
+    try {
+        consentStore.saveConsent(documentVersion);
+    } catch {
+        /* local cache is non-critical */
+    }
+    logger.info(`Content capture consent accepted and recorded (document ${documentVersion}).`);
+    return { ok: true };
+});
+
 // -------------------------------------------------------------------- startup
 
 async function bootstrap() {
@@ -384,6 +583,17 @@ if (!gotSingleInstanceLock) {
 
     app.on("before-quit", () => {
         isQuitting = true;
+    });
+
+    // Windows logoff / shutdown / restart. Record it as a clean end and try a
+    // best-effort final flush — the OS may not give us much time.
+    app.on("session-end", (event) => {
+        const reason = (event && event.reason) || "unknown";
+        logger.info(`Windows session ending (${reason}).`);
+        if (eventPipelineReady()) {
+            emitEvent("session_end", { signal: "windows_session_end", reason });
+            shutdownEventPipeline({ reason: "session_end" }).catch(() => {});
+        }
     });
 }
 

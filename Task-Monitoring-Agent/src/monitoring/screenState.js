@@ -1,4 +1,8 @@
-// Windows physical-display power detection.
+// Windows physical-display power detection (one-shot probe).
+//
+// DEPRECATED (Phase 3): the activity tracker now reads display power from the
+// persistent displayPowerWatcher.js stream instead of spawning this probe every
+// poll. Kept for reference / ad-hoc diagnostics; no longer on any hot path.
 //
 // "Idle" for activity monitoring means exactly one thing: the PHYSICAL DISPLAY
 // IS OFF. Not screen lock, not a screensaver, and NEVER keyboard/mouse

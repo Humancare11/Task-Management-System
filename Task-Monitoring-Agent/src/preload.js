@@ -18,4 +18,15 @@ contextBridge.exposeInMainWorld("agentSetup", {
             ipcRenderer.on("agent:refresh", () => handler());
         }
     },
+
+    // §5b content-capture consent. The renderer shows the consent document and
+    // reports the employee's acceptance; it never sees captured content.
+    getConsentState: () => ipcRenderer.invoke("content:getConsentState"),
+    acceptConsent: (documentVersion) =>
+        ipcRenderer.invoke("content:acceptConsent", { documentVersion }),
+    onConsentRequired: (handler) => {
+        if (typeof handler === "function") {
+            ipcRenderer.on("content:consentRequired", (_e, data) => handler(data));
+        }
+    },
 });

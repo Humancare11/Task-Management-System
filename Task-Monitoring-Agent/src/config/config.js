@@ -25,13 +25,44 @@ const fs = require("fs");
 const path = require("path");
 
 const DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 30;
-const DEFAULT_ACTIVITY_POLL_INTERVAL_SECONDS = 5;
+// Phase 3: display power is now a persistent notification stream
+// (displayPowerWatcher.js), not a per-poll PowerShell spawn, so the poll no
+// longer has to be fast to keep screen on/off boundaries tight. Raised 5 -> 15
+// to cut the active-window / domain PowerShell spawn rate ~3x. Legacy
+// /activities session boundaries are correspondingly coarser (up to ~15s).
+const DEFAULT_ACTIVITY_POLL_INTERVAL_SECONDS = 15;
 const DEFAULT_ACTIVITY_BUFFER_MAX_SIZE = 10;
-const DEFAULT_IDLE_THRESHOLD_SECONDS = 60;
+// §3: keyboard/mouse inactivity that marks the user IDLE. Was 60 and unused;
+// now the real 5-minute threshold consumed by monitoring/inputState.js.
+const DEFAULT_IDLE_THRESHOLD_SECONDS = 300;
+
+// Events pipeline (Phase 1). The agent emits raw events IN ADDITION to the
+// legacy /activities path (dual mode). Set EVENTS_PIPELINE_ENABLED=false to
+// fully disable event emission/flush/input-polling and fall back to the
+// legacy-only behaviour.
+const DEFAULT_EVENT_FLUSH_INTERVAL_SECONDS = 20;
+const DEFAULT_EVENT_BATCH_MAX_SIZE = 100;
+const DEFAULT_EVENT_QUEUE_MAX_EVENTS = 20000;
+const DEFAULT_INPUT_POLL_INTERVAL_SECONDS = 25;
+
+// §5b content capture (Phase 4). Fully inert unless the SERVER's heartbeat
+// reports content_capture.active === true (legal gate open + org enabled +
+// consent on file). These only tune cadence when it IS active.
+const DEFAULT_CONTENT_POLL_INTERVAL_SECONDS = 4;
+const DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS = 30;
 
 function positiveNumberOr(value, fallback) {
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function booleanOr(value, fallback) {
+    if (value === undefined || value === null || value === "") return fallback;
+    if (typeof value === "boolean") return value;
+    const s = String(value).trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(s)) return true;
+    if (["0", "false", "no", "off"].includes(s)) return false;
+    return fallback;
 }
 
 function loadFileConfig() {
@@ -63,7 +94,37 @@ function buildConfig(fallback = {}) {
     const agentUuid = layered("AGENT_UUID", "agentUuid");
     const agentSecret = layered("AGENT_SECRET", "agentSecret");
 
+    // --- Phase 5 cutover: what the agent actually sends ---
+    //   "events" (default) -> raw event pipeline only. Legacy POST /agent/activities
+    //                         is NOT written to.
+    //   "dual"             -> both, for a supervised transition window.
+    //   "legacy"           -> only POST /agent/activities (the revert path).
+    // EVENTS_PIPELINE_ENABLED=false is honoured as a hard override that forces
+    // legacy-only, so a stale config that only knows that flag still works.
+    const rawMode = String(
+        layered("PIPELINE_MODE", "pipelineMode") || "events",
+    ).trim().toLowerCase();
+    let pipelineMode = ["events", "dual", "legacy"].includes(rawMode) ? rawMode : "events";
+
+    const eventsFlagRaw =
+        process.env.EVENTS_PIPELINE_ENABLED !== undefined
+            ? process.env.EVENTS_PIPELINE_ENABLED
+            : fb.eventsPipelineEnabled !== undefined
+                ? fb.eventsPipelineEnabled
+                : fileConfig.eventsPipelineEnabled;
+    const eventsFlag = booleanOr(eventsFlagRaw, true);
+    if (eventsFlagRaw !== undefined && eventsFlag === false) {
+        pipelineMode = "legacy"; // hard override
+    }
+
+    const eventsPipelineEnabled = pipelineMode !== "legacy";
+    // Never leave the agent blind: if events are off, legacy stays on regardless
+    // of mode.
+    const legacyActivitiesEnabled =
+        !eventsPipelineEnabled || pipelineMode === "legacy" || pipelineMode === "dual";
+
     return {
+        pipelineMode,
         apiBaseUrl: apiBaseUrl.replace(/\/+$/, ""),
         agentUuid,
         agentSecret,
@@ -82,6 +143,37 @@ function buildConfig(fallback = {}) {
         idleThresholdSeconds: positiveNumberOr(
             layered("IDLE_THRESHOLD_SECONDS", "idleThresholdSeconds"),
             DEFAULT_IDLE_THRESHOLD_SECONDS,
+        ),
+
+        // --- events pipeline (Phase 1); gated by pipelineMode (Phase 5) ---
+        eventsPipelineEnabled,
+        legacyActivitiesEnabled,
+        eventFlushIntervalSeconds: positiveNumberOr(
+            layered("EVENT_FLUSH_INTERVAL_SECONDS", "eventFlushIntervalSeconds"),
+            DEFAULT_EVENT_FLUSH_INTERVAL_SECONDS,
+        ),
+        eventBatchMaxSize: positiveNumberOr(
+            layered("EVENT_BATCH_MAX_SIZE", "eventBatchMaxSize"),
+            DEFAULT_EVENT_BATCH_MAX_SIZE,
+        ),
+        eventQueueMaxEvents: positiveNumberOr(
+            layered("EVENT_QUEUE_MAX_EVENTS", "eventQueueMaxEvents"),
+            DEFAULT_EVENT_QUEUE_MAX_EVENTS,
+        ),
+        inputPollIntervalSeconds: positiveNumberOr(
+            layered("INPUT_POLL_INTERVAL_SECONDS", "inputPollIntervalSeconds"),
+            DEFAULT_INPUT_POLL_INTERVAL_SECONDS,
+        ),
+
+        // --- §5b content capture (Phase 4) — cadence only; activation is
+        //     driven entirely by the server heartbeat signal ---
+        contentPollIntervalSeconds: positiveNumberOr(
+            layered("CONTENT_POLL_INTERVAL_SECONDS", "contentPollIntervalSeconds"),
+            DEFAULT_CONTENT_POLL_INTERVAL_SECONDS,
+        ),
+        contentFlushIntervalSeconds: positiveNumberOr(
+            layered("CONTENT_FLUSH_INTERVAL_SECONDS", "contentFlushIntervalSeconds"),
+            DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS,
         ),
     };
 }
@@ -103,8 +195,15 @@ function validateConfig(config) {
 module.exports = {
     buildConfig,
     validateConfig,
+    booleanOr,
     DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
     DEFAULT_ACTIVITY_POLL_INTERVAL_SECONDS,
     DEFAULT_ACTIVITY_BUFFER_MAX_SIZE,
     DEFAULT_IDLE_THRESHOLD_SECONDS,
+    DEFAULT_EVENT_FLUSH_INTERVAL_SECONDS,
+    DEFAULT_EVENT_BATCH_MAX_SIZE,
+    DEFAULT_EVENT_QUEUE_MAX_EVENTS,
+    DEFAULT_INPUT_POLL_INTERVAL_SECONDS,
+    DEFAULT_CONTENT_POLL_INTERVAL_SECONDS,
+    DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS,
 };

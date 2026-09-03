@@ -1,14 +1,14 @@
-import { ArrowRight, AppWindow, Globe, Clock } from "lucide-react";
+import { ArrowRight, AppWindow, Globe, Clock, Moon, MonitorOff, AlertTriangle } from "lucide-react";
 import Avatar from "../../components/ui/Avatar.jsx";
 import Badge from "../../components/ui/Badge.jsx";
-import {
-  employeeName,
-  formatHm,
-  formatRelative,
-} from "./monitoringUtils.js";
+import { employeeName, formatClock, formatHm, summaryStatus } from "./monitoringUtils.js";
 
-export default function MonitoringCard({ group, onOpen }) {
-  const { user, status } = group;
+// One card per employee for the selected day, from a monitoring_user_day_summaries
+// row. Clicking opens the full day-detail page.
+export default function MonitoringCard({ summary, onOpen }) {
+  const status = summaryStatus(summary);
+  const topApp = (summary.top_apps || [])[0];
+  const topDomain = (summary.top_domains || [])[0];
 
   return (
     <button
@@ -18,57 +18,78 @@ export default function MonitoringCard({ group, onOpen }) {
     >
       <div className="flex items-start gap-3">
         <Avatar
-          firstName={user?.first_name}
-          lastName={user?.last_name}
+          firstName={summary.user?.first_name}
+          lastName={summary.user?.last_name}
           size="md"
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-txt-primary">
-            {employeeName(user)}
+            {employeeName(summary.user)}
           </p>
           <p className="truncate text-xs text-txt-muted">
-            {/* No project association exists on monitoring records yet. */}
-            Project: <span className="text-txt-muted">--</span>
+            {formatClock(summary.first_pc_on)} – {formatClock(summary.final_pc_off)}
+            {summary.multi_device ? ` · ${summary.device_count} devices` : ""}
           </p>
         </div>
-        <Badge tone={status.tone}>{status.label}</Badge>
+        <div className="flex flex-col items-end gap-1">
+          <Badge tone={status.tone}>{status.label}</Badge>
+          {summary.unclean_shutdown && !summary.is_provisional && (
+            <span className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+              <AlertTriangle size={10} /> unclean
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 border-t border-hair pt-3">
+      <div className="grid grid-cols-3 gap-3 border-t border-hair pt-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-txt-muted">
-            Last activity
+            Session
           </p>
-          <p className="mt-0.5 text-xs text-txt-primary">
-            {formatRelative(group.lastActiveAt)}
-          </p>
+          <p className="mt-0.5 text-xs text-txt-primary">{formatHm(summary.span_seconds)}</p>
         </div>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-txt-muted">
-            Tracked time
+            Active
           </p>
-          <p className="mt-0.5 text-xs text-txt-primary">
-            {formatHm(group.totalSeconds)}
+          <p className="mt-0.5 text-xs text-txt-primary">{formatHm(summary.active_seconds)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-txt-muted">
+            Idle
           </p>
+          <p className="mt-0.5 text-xs text-txt-primary">{formatHm(summary.idle_seconds)}</p>
         </div>
       </div>
 
       <div className="flex items-center justify-between text-[11px] text-txt-muted">
-        <span className="flex items-center gap-3">
+        <span className="flex min-w-0 items-center gap-3">
           <span className="flex items-center gap-1">
-            <AppWindow size={12} /> {group.applications}
+            <MonitorOff size={12} /> {formatHm(summary.screen_off_seconds)}
           </span>
-          <span className="flex items-center gap-1">
-            <Globe size={12} /> {group.websites}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock size={12} /> {formatHm(group.idleSeconds)} idle
-          </span>
+          {topApp && (
+            <span className="flex min-w-0 items-center gap-1">
+              <AppWindow size={12} />
+              <span className="truncate">{topApp.name}</span>
+            </span>
+          )}
+          {topDomain && !topDomain.is_private && (
+            <span className="flex min-w-0 items-center gap-1">
+              <Globe size={12} />
+              <span className="truncate">{topDomain.domain}</span>
+            </span>
+          )}
         </span>
-        <span className="flex items-center gap-1 font-medium text-accentblue opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="flex shrink-0 items-center gap-1 font-medium text-accentblue opacity-0 transition-opacity group-hover:opacity-100">
           View Details <ArrowRight size={12} />
         </span>
       </div>
+
+      {summary.overlap_seconds > 0 && (
+        <p className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+          <Clock size={10} /> {formatHm(summary.overlap_seconds)} concurrent across devices
+        </p>
+      )}
     </button>
   );
 }

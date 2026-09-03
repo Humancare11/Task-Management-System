@@ -35,6 +35,28 @@ function isSupportedBrowser(applicationName) {
     return SUPPORTED_BROWSER_MATCHERS.some((m) => name.includes(m));
 }
 
+// Canonical browser id for the events pipeline ("chrome", "edge", ...). Order
+// matters: "Microsoft Edge" is Chromium-based but must not be reported as
+// chrome. Returns null when the application is not a supported browser.
+const BROWSER_ID_ORDER = [
+    "edge",
+    "chrome",
+    "firefox",
+    "brave",
+    "opera",
+    "vivaldi",
+    "chromium",
+];
+
+function canonicalBrowser(applicationName) {
+    if (!applicationName || typeof applicationName !== "string") return null;
+    const name = applicationName.toLowerCase();
+    for (const id of BROWSER_ID_ORDER) {
+        if (name.includes(id)) return id;
+    }
+    return null;
+}
+
 /**
  * Normalize a raw address-bar value (a full URL, or a bare host as Chrome
  * shows it) to a lower-case registrable-style hostname. Returns null when the
@@ -180,4 +202,9 @@ function getActiveDomain(active) {
     });
 }
 
-module.exports = { getActiveDomain, isSupportedBrowser, normalizeDomain };
+module.exports = {
+    getActiveDomain,
+    isSupportedBrowser,
+    canonicalBrowser,
+    normalizeDomain,
+};

@@ -17,11 +17,27 @@ const questionRoutes = require("./routes/questionRoute");
 const monitoringRoutes = require("./routes/monitoringRoute");
 const activityRoutes = require("./routes/activityRoutes");
 const userRoutes = require("./routes/userRoutes");
+const monitoringRecomputeRunner = require("./services/monitoringRecomputeRunner");
+const monitoringContentRetention = require("./services/monitoringContentRetention");
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+
+// Global JSON body parser (default ~100kb limit) for every route EXCEPT the
+// monitoring raw-event ingest, which needs a larger cap and mounts its own
+// parser in routes/monitoringRoute.js. We skip the global parser for that one
+// path so it doesn't reject a large batch before the route-specific parser
+// runs. Every other route behaves exactly as before.
+const ROUTE_SPECIFIC_PARSER_PATHS = new Set([
+  "/api/monitoring/agent/events",
+  "/api/monitoring/agent/content",
+]);
+const defaultJsonParser = express.json();
+app.use((req, res, next) => {
+  if (ROUTE_SPECIFIC_PARSER_PATHS.has(req.path)) return next();
+  return defaultJsonParser(req, res, next);
+});
 
 app.use("/uploads", require("express").static(require("path").join(__dirname, "uploads")));
 
@@ -60,6 +76,14 @@ initSocket(server);
 
 async function start() {
   await connectDB();
+
+  // Monitoring derivation consumer (single-instance; see the service header).
+  // MONITORING_RECOMPUTE_RUNNER_ENABLED=false turns it off.
+  monitoringRecomputeRunner.start();
+
+  // §5b-4 content retention: hard-deletes expired captured content daily.
+  // Harmless while the legal gate is closed (no rows exist).
+  monitoringContentRetention.start();
 
   server.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);

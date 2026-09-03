@@ -21,6 +21,7 @@ import Questions from "./pages/questions/Questions.jsx";
 import CreateQuestion from "./pages/questions/CreateQuestion.jsx";
 import QuestionDetails from "./pages/questions/QuestionDetails.jsx";
 import Monitoring from "./pages/monitoring/Monitoring.jsx";
+import MonitoringDayDetail from "./pages/monitoring/MonitoringDayDetail.jsx";
 
 export default function App() {
   return (
@@ -147,6 +148,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Monitoring />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/monitoring/:userId"
+        element={
+          <ProtectedRoute>
+            <MonitoringDayDetail />
           </ProtectedRoute>
         }
       />

@@ -58,6 +58,34 @@ const MonitoringAgent = sequelize.define(
             allowNull: true,
         },
 
+        // agent_version already exists in the table (migration 20260826000000)
+        // but was missing from this model — declared here so the events
+        // pipeline can read/write it.
+        agent_version: {
+            type: DataTypes.STRING(50),
+            allowNull: true,
+        },
+
+        // --- events pipeline (Phase 0, migration 20260903121300) ---
+        // last_heartbeat_at is DELIBERATELY separate from last_seen_at so
+        // existing readers of last_seen_at are unaffected.
+        last_heartbeat_at: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+        current_run_id: {
+            type: DataTypes.CHAR(36),
+            allowNull: true,
+        },
+        last_os_boot_time: {
+            type: DataTypes.BIGINT,
+            allowNull: true,
+        },
+        content_consent_at: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+
         enrolled_at: {
             type: DataTypes.DATE,
             allowNull: false,

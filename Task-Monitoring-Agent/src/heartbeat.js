@@ -7,16 +7,24 @@
 
 const { buildConfig, validateConfig } = require("./config/config");
 const { sendHeartbeat } = require("./auth/agentAuth");
+const { emitEvent } = require("./monitoring/eventPipeline");
 const logger = require("./utils/logger");
 
 let timer = null;
 
 async function beat(config, onResult) {
+    // Emit the liveness event regardless of the HTTP outcome — the server uses
+    // the last heartbeat event to bound an unclean-shutdown session. No-op when
+    // the events pipeline is not running.
+    emitEvent("heartbeat", {});
+
     const result = await sendHeartbeat(config);
 
     if (typeof onResult === "function") {
         try {
-            onResult(result.kind);
+            // (kind, fullResult) — fullResult carries agent + contentCapture
+            // signal. Existing observers that take only `kind` are unaffected.
+            onResult(result.kind, result);
         } catch {
             /* a bad observer must never break the loop */
         }
