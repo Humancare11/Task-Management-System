@@ -16,6 +16,10 @@ test("consent document exports a sortable version, a title, and non-trivial text
   assert.ok(doc.CONTENT_CONSENT_DOCUMENT_TEXT.length > 400);
 });
 
+test("v2: version reflects the widened (all-site) scope", () => {
+  assert.equal(doc.CONTENT_CONSENT_DOCUMENT_VERSION, "2026-09-04.v2");
+});
+
 test("the notice covers what it must (search + prompts, exclusions, choice)", () => {
   const t = doc.CONTENT_CONSENT_DOCUMENT_TEXT.toLowerCase();
   for (const phrase of [
@@ -32,6 +36,21 @@ test("the notice covers what it must (search + prompts, exclusions, choice)", ()
   }
 });
 
+test("the notice still names the always-excluded protected categories", () => {
+  const t = doc.CONTENT_CONSENT_DOCUMENT_TEXT.toLowerCase();
+  for (const phrase of ["banking", "payment", "healthcare", "government"]) {
+    assert.ok(t.includes(phrase), `notice should name the excluded category "${phrase}"`);
+  }
+});
+
+test("the notice describes any-website search scope, not a fixed 5-site list", () => {
+  const t = doc.CONTENT_CONSENT_DOCUMENT_TEXT.toLowerCase();
+  assert.ok(
+    t.includes("any website") || t.includes("any site"),
+    "notice should state search queries are recorded on any website",
+  );
+});
+
 test("contentCaptureGate re-exports the SAME version (no drift)", () => {
   assert.equal(
     gate.CONTENT_CONSENT_DOCUMENT_VERSION,
@@ -39,6 +58,6 @@ test("contentCaptureGate re-exports the SAME version (no drift)", () => {
   );
 });
 
-test("the legal gate is open (approved 2026-09-04 after legal review)", () => {
-  assert.equal(gate.CONTENT_CAPTURE_LEGALLY_APPROVED, true);
+test("the legal gate is closed pending re-review of the widened scope", () => {
+  assert.equal(gate.CONTENT_CAPTURE_LEGALLY_APPROVED, false);
 });

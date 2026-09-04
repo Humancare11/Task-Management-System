@@ -2,8 +2,16 @@
 //
 // When the active foreground application is a supported browser, this module
 // reads ONLY the browser's address-bar value via Windows UI Automation
-// (the same accessibility API screen readers use) and normalizes it to a
-// registrable-style hostname such as "youtube.com".
+// (the same accessibility API screen readers use) and normalizes it.
+//
+// Two views of the same address-bar reading are exposed:
+//   - normalizeDomain()  -> the registrable domain ("youtube.com"). Used by the
+//                           activity/events pipeline (browser_state) so website
+//                           sessions group the way they always have.
+//   - normalizeHost()    -> the full host ("gemini.google.com"). Used by §5b
+//                           content capture so a captured search/prompt is
+//                           attributed to the exact site, not collapsed to the
+//                           registrable domain.
 //
 // It deliberately does NOT:
 //   - read browser history or history databases
@@ -11,7 +19,7 @@
 //   - keep full URLs, query strings or path segments
 //   - touch the keyboard, mouse, clipboard, screen, camera or microphone
 //
-// Only the normalized domain is returned. Anything uncertain returns null.
+// Only the normalized domain/host is returned. Anything uncertain returns null.
 // No third-party dependency is used: UIAutomationClient / UIAutomationTypes
 // ship with the .NET Framework on every supported version of Windows.
 
@@ -57,12 +65,22 @@ function canonicalBrowser(applicationName) {
     return null;
 }
 
+// Common two-level public suffixes. Kept small and explicit (no Public Suffix
+// List dependency); extend as needed.
+const MULTI_PART_TLDS = new Set([
+    "co.uk", "org.uk", "gov.uk", "ac.uk", "co.in", "co.jp", "com.au",
+    "com.br", "co.nz", "co.za", "com.sg",
+]);
+
 /**
  * Normalize a raw address-bar value (a full URL, or a bare host as Chrome
- * shows it) to a lower-case registrable-style hostname. Returns null when the
- * value is not a usable web host (search text, internal page, localhost, ...).
+ * shows it) to a lower-case host. Returns null when the value is not a usable
+ * web host (search text, internal page, localhost, ...).
+ *
+ * The leading "www." is stripped; everything else in the host is preserved, so
+ * "gemini.google.com" stays "gemini.google.com".
  */
-function normalizeDomain(raw) {
+function normalizeHost(raw) {
     if (!raw || typeof raw !== "string") return null;
     let value = raw.trim();
     if (!value) return null;
@@ -75,7 +93,7 @@ function normalizeDomain(raw) {
     let host;
     try {
         const url = new URL(value);
-        // Only http(s) pages carry a meaningful website domain.
+        // Only http(s) pages carry a meaningful website host.
         if (url.protocol !== "http:" && url.protocol !== "https:") return null;
         host = url.hostname;
     } catch {
@@ -90,17 +108,35 @@ function normalizeDomain(raw) {
     if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/.test(host)) return null;
     if (host === "localhost") return null;
 
-    // Registrable domain heuristic (no Public Suffix List dependency):
-    // keep the last two labels, but keep three for common two-level ccTLDs.
+    return host;
+}
+
+/**
+ * The registrable domain for an already-normalized host: keep the last two
+ * labels, but keep three for the common two-level ccTLDs. "gemini.google.com"
+ * -> "google.com"; "bbc.co.uk" -> "bbc.co.uk".
+ */
+function registrableDomainFromHost(host) {
+    if (!host || typeof host !== "string") return null;
     const labels = host.split(".");
     if (labels.length <= 2) return host;
     const lastTwo = labels.slice(-2).join(".");
-    const multiPartTlds = new Set([
-        "co.uk", "org.uk", "gov.uk", "ac.uk", "co.in", "co.jp", "com.au",
-        "com.br", "co.nz", "co.za", "com.sg",
-    ]);
-    if (multiPartTlds.has(lastTwo)) return labels.slice(-3).join(".");
+    if (MULTI_PART_TLDS.has(lastTwo)) return labels.slice(-3).join(".");
     return lastTwo;
+}
+
+/**
+ * Normalize a raw address-bar value to a lower-case registrable-style hostname
+ * such as "youtube.com". Returns null when the value is not a usable web host.
+ *
+ * Preserved verbatim (composition of normalizeHost + registrableDomainFromHost)
+ * so the activity/events pipeline keeps grouping website sessions exactly as
+ * before.
+ */
+function normalizeDomain(raw) {
+    const host = normalizeHost(raw);
+    if (!host) return null;
+    return registrableDomainFromHost(host);
 }
 
 const PS_SCRIPT = `
@@ -148,12 +184,12 @@ function encodeCommand(script) {
 }
 
 /**
- * Determine the active website/domain for a supported browser.
- * @param {{applicationName?:string}|null} active  the current active-window sample
- * @returns {Promise<string|null>} normalized domain, or null when not a
- *          supported browser / not determinable / uncertain.
+ * Run the address-bar UI Automation query once and return the raw candidate
+ * strings (address-bar Edit control values). Resolves [] / null on any failure.
+ * @param {{applicationName?:string}|null} active
+ * @returns {Promise<string[]|null>}
  */
-function getActiveDomain(active) {
+function queryAddressBarValues(active) {
     if (process.platform !== "win32") return Promise.resolve(null);
     if (!active || !isSupportedBrowser(active.applicationName)) {
         return Promise.resolve(null);
@@ -189,22 +225,54 @@ function getActiveDomain(active) {
                     resolve(null);
                     return;
                 }
-                for (const value of values) {
-                    const domain = normalizeDomain(value);
-                    if (domain) {
-                        resolve(domain);
-                        return;
-                    }
-                }
-                resolve(null);
+                resolve(values);
             },
         );
     });
 }
 
+/**
+ * Determine the active website/domain (registrable) for a supported browser.
+ * Unchanged contract — the activity/events pipeline depends on this.
+ * @param {{applicationName?:string}|null} active
+ * @returns {Promise<string|null>}
+ */
+async function getActiveDomain(active) {
+    const values = await queryAddressBarValues(active);
+    if (!Array.isArray(values)) return null;
+    for (const value of values) {
+        const domain = normalizeDomain(value);
+        if (domain) return domain;
+    }
+    return null;
+}
+
+/**
+ * Determine the active website for a supported browser as BOTH the full host
+ * and its registrable domain. Used by §5b content capture for correct
+ * per-site attribution (e.g. "gemini.google.com" is not collapsed to
+ * "google.com").
+ * @param {{applicationName?:string}|null} active
+ * @returns {Promise<{host:string, registrableDomain:string}|null>}
+ */
+async function getActiveHostInfo(active) {
+    const values = await queryAddressBarValues(active);
+    if (!Array.isArray(values)) return null;
+    for (const value of values) {
+        const host = normalizeHost(value);
+        if (host) {
+            return { host, registrableDomain: registrableDomainFromHost(host) };
+        }
+    }
+    return null;
+}
+
 module.exports = {
     getActiveDomain,
+    getActiveHostInfo,
     isSupportedBrowser,
     canonicalBrowser,
+    normalizeHost,
     normalizeDomain,
+    registrableDomainFromHost,
 };

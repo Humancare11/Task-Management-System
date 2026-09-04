@@ -32,6 +32,7 @@ const {
   CONTENT_CONSENT_DOCUMENT_TEXT,
 } = require("../config/contentConsentDocument");
 const { isConfigured: contentKeysConfigured } = require("../utils/contentCrypto");
+const { loadActivePatterns } = require("../utils/contentBlocklist");
 const monitoringContent = require("../services/monitoringContent");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -412,6 +413,15 @@ exports.agentHeartbeat = async (req, res) => {
           raw: true,
         });
         const consented = Boolean(consent);
+        // Blocklist the agent must enforce for capture: hardcoded categories
+        // (banking / payment / healthcare / government) ∪ the operator-tunable
+        // monitoring_blocklist_domains table. Cached ~5 min in loadActivePatterns.
+        let blocklistPatterns = [];
+        try {
+          blocklistPatterns = await loadActivePatterns(MonitoringBlocklistDomain);
+        } catch (blErr) {
+          console.error("Heartbeat blocklist load failed:", blErr);
+        }
         contentCapture = {
           active: CONTENT_CAPTURE_LEGALLY_APPROVED && consented,
           legal_gate_open: CONTENT_CAPTURE_LEGALLY_APPROVED,
@@ -419,6 +429,7 @@ exports.agentHeartbeat = async (req, res) => {
           consent_required: true,
           consented,
           document_version: CONTENT_CONSENT_DOCUMENT_VERSION,
+          blocklist_patterns: blocklistPatterns,
         };
         if (!consented) {
           contentCapture.document_title = CONTENT_CONSENT_DOCUMENT_TITLE;

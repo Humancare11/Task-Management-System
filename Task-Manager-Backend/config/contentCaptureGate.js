@@ -23,9 +23,13 @@
  * override. Flipping it is a reviewed code change.
  */
 
-// Opened 2026-09-04 after legal review of the consent flow + feature, with the
-// consent document finalized and consent rows collected for captured employees.
-const CONTENT_CAPTURE_LEGALLY_APPROVED = true;
+// Returned to closed 2026-09-04: the capture scope was widened from the fixed
+// five-site list to all-site search-field capture (consent document bumped to
+// 2026-09-04.v2). The earlier approval covered only the narrow scope, so this
+// gate stays false until the widened scope + v2 notice pass a fresh legal
+// review. Flipping it is a reviewed code change — there is deliberately no env
+// override.
+const CONTENT_CAPTURE_LEGALLY_APPROVED = false;
 
 // The consent document version employees must have accepted before any of their
 // content is captured or stored. Defined with the notice text in

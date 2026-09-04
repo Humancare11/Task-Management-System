@@ -2,12 +2,17 @@
 // §5b content capture.
 //
 // It reads the FOCUSED element and returns:
-//   { text, isPassword, controlType }
+//   { text, isPassword, controlType, name, automationId, ariaRole, localizedControlType }
 // via a short PowerShell script that loads UIAutomationClient. Best-effort:
 //   - non-Windows, PowerShell failure, no focused element, or a non-edit
 //     control  -> resolves null.
 //   - a password / masked field                    -> { isPassword: true } and
 //     the caller MUST NOT use any text.
+//
+// The name / automationId / ariaRole / localizedControlType fields let the
+// caller decide whether the focused control is a SEARCH / QUERY field (all-site
+// capture only stores text from fields that look like search boxes). They are
+// element metadata, never page content or keystrokes.
 //
 // It never reads anything but the focused element, never reads keystrokes, and
 // never walks the tree looking for other fields.
@@ -26,10 +31,19 @@ try {
   $isPw = $false
   try { $isPw = [bool]$el.Current.IsPassword } catch {}
 
+  $name = ''
+  try { $name = [string]$el.Current.Name } catch {}
+  $autoId = ''
+  try { $autoId = [string]$el.Current.AutomationId } catch {}
+  $lct = ''
+  try { $lct = [string]$el.Current.LocalizedControlType } catch {}
+  $aria = ''
+  try { $aria = [string]$el.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::AriaRoleProperty) } catch {}
+
   # Only edit-like controls are of interest.
   $editish = @('ControlType.Edit','ControlType.Document','ControlType.ComboBox')
   if ($editish -notcontains $ct) {
-    [pscustomobject]@{ text=''; isPassword=$isPw; controlType=$ct } | ConvertTo-Json -Compress
+    [pscustomobject]@{ text=''; isPassword=$isPw; controlType=$ct; name=$name; automationId=$autoId; ariaRole=$aria; localizedControlType=$lct } | ConvertTo-Json -Compress
     exit
   }
 
@@ -46,7 +60,7 @@ try {
       } catch {}
     }
   }
-  [pscustomobject]@{ text=$text; isPassword=$isPw; controlType=$ct } | ConvertTo-Json -Compress
+  [pscustomobject]@{ text=$text; isPassword=$isPw; controlType=$ct; name=$name; automationId=$autoId; ariaRole=$aria; localizedControlType=$lct } | ConvertTo-Json -Compress
 } catch {
   '{}'
 }
@@ -57,7 +71,9 @@ function encodeCommand(script) {
 }
 
 /**
- * @returns {Promise<{ text:string, isPassword:boolean, controlType:string } | null>}
+ * @returns {Promise<{ text:string, isPassword:boolean, controlType:string,
+ *   name:string, automationId:string, ariaRole:string,
+ *   localizedControlType:string } | null>}
  */
 function readFocusedField() {
     if (process.platform !== "win32") return Promise.resolve(null);
@@ -88,6 +104,14 @@ function readFocusedField() {
                     text: typeof parsed.text === "string" ? parsed.text : "",
                     isPassword: Boolean(parsed.isPassword),
                     controlType: parsed.controlType,
+                    name: typeof parsed.name === "string" ? parsed.name : "",
+                    automationId:
+                        typeof parsed.automationId === "string" ? parsed.automationId : "",
+                    ariaRole: typeof parsed.ariaRole === "string" ? parsed.ariaRole : "",
+                    localizedControlType:
+                        typeof parsed.localizedControlType === "string"
+                            ? parsed.localizedControlType
+                            : "",
                 });
             },
         );

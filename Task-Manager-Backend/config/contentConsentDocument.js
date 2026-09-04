@@ -19,30 +19,41 @@
  * (config/contentCaptureGate.js) is set true, the encryption key registry is
  * configured, and the organization enables it. Recording consent here does not
  * start any capture.
+ *
+ * ── v2 (2026-09-04) ─────────────────────────────────────────────────────────
+ * Scope widened from a fixed five-site list to: search queries typed into a
+ * search box on ANY website (except the protected categories below), plus
+ * prompts to the named AI assistants. This is a material change, so the version
+ * is bumped — every employee is re-prompted and their capture pauses until they
+ * accept v2. The prior narrow-scope legal approval no longer applies; the
+ * legal gate has been returned to closed pending fresh review.
  */
 
-const CONTENT_CONSENT_DOCUMENT_VERSION = "2026-09-04.v1";
+const CONTENT_CONSENT_DOCUMENT_VERSION = "2026-09-04.v2";
 
 const CONTENT_CONSENT_DOCUMENT_TITLE =
-  "Notice & Consent — Recording of Search Terms and AI Assistant Prompts";
+  "Notice & Consent — Recording of Search Queries and AI Assistant Prompts";
 
 const CONTENT_CONSENT_DOCUMENT_TEXT = `Your employer already runs activity monitoring on this computer (active
 application, website domains, idle and screen-off time). Your employer is asking
-for your consent to additionally record ONE more thing:
+for your consent to additionally record TWO more things:
 
-  • the text you type into the search box or prompt box on this specific set of
-    websites: Google Search, YouTube, ChatGPT, Claude, and Gemini.
+  • the text you type into a search box on any website you visit — your search
+    queries; and
+  • the prompts you send to AI assistants (ChatGPT, Claude, and Gemini).
 
-That is all that is recorded from your typing. In plain terms: your search
-queries and the prompts you send to those AI assistants.
+That is all that is recorded from your typing: your search queries and your AI
+prompts. It is only captured from a field that is identified as a search or
+query box, or from an AI assistant's prompt box.
 
 WHAT IS NOT RECORDED
   • The contents of web pages, documents, messages, or emails.
   • Passwords, PINs, card numbers, or any field the browser shows as masked.
-  • Any other form field, or anything you type in any other application.
-  • Anything at all on banking, payment, healthcare, or government websites.
+  • Any other form field (names, addresses, comments, message boxes, and so on),
+    or anything you type in any other application.
+  • Anything at all on banking, payment, healthcare, or government websites —
+    these categories are always excluded from this recording.
   • Anything at all in a private / incognito / InPrivate browser window.
-  • Anything on any website other than the five named above.
 
 HOW IT IS HANDLED
   • Recorded text is encrypted before it is stored. There is no readable copy.
@@ -54,7 +65,7 @@ HOW IT IS HANDLED
 
 YOUR CHOICE
   • "I Accept" turns on this additional recording for your account.
-  • "I Decline", or closing this window, means none of your search terms or
+  • "I Decline", or closing this window, means none of your search queries or
     prompts are recorded. Your existing activity monitoring is unaffected either
     way, and declining has no other effect here.
   • You can withdraw this consent at any time by contacting your manager or HR;

@@ -246,6 +246,13 @@ function applyContentSignal(config, signal) {
         hasLocalConsent: (v) => consentStore.hasConsentFor(v),
     });
 
+    // Push the server's blocklist (hardcoded ∪ operator-tunable DB list) to the
+    // capture runner regardless of the on/off decision — it's cheap and keeps
+    // the list fresh for the next start.
+    if (signal && Array.isArray(signal.blocklist_patterns)) {
+        contentCaptureRunner.setPolicy({ blocklistPatterns: signal.blocklist_patterns });
+    }
+
     if (decision.capture === "on") {
         if (decision.cacheConsent) {
             // Server confirms consent; mirror it locally so we don't re-prompt.
