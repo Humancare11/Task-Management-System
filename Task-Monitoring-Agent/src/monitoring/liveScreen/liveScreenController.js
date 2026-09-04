@@ -137,13 +137,24 @@ async function startSession(directive) {
         captureWin: null,
         iceServers: directive.ice_servers || [],
         viewerName: directive.viewer_name || null,
+        connected: false,
         maxTimer: setTimeout(
             () => stopSession("max_duration", { notifyServer: true }),
             (config.liveScreenMaxSessionSeconds || 1800) * 1000,
         ),
+        // Local safety net: if the peer connection never establishes (e.g.
+        // STUN-only on a strict NAT with no TURN), tear everything down so the
+        // screen capture + banner don't linger. Independent of the server timer.
+        connectTimer: setTimeout(() => {
+            if (session && !session.connected) {
+                logger.warn("Live screen: peer did not connect in time — stopping.");
+                stopSession("connect_failed", { notifyServer: true });
+            }
+        }, (config.liveScreenConnectTimeoutSeconds || 45) * 1000),
         answerApplied: false,
     };
     if (session.maxTimer.unref) session.maxTimer.unref();
+    if (session.connectTimer.unref) session.connectTimer.unref();
 
     // 2. Capture window
     try {
@@ -161,6 +172,7 @@ function stopSession(reason, { notifyServer = true } = {}) {
     logger.info(`Live screen: stopping session ${id} (${reason}).`);
 
     if (session.maxTimer) clearTimeout(session.maxTimer);
+    if (session.connectTimer) clearTimeout(session.connectTimer);
     for (const win of [session.captureWin, session.bannerWin]) {
         try {
             if (win && !win.isDestroyed()) {
@@ -174,7 +186,12 @@ function stopSession(reason, { notifyServer = true } = {}) {
     session = null;
 
     if (notifyServer) {
-        const type = reason === "stopped_by_employee" ? "stopped" : reason === "error" ? "error" : "stopped";
+        const type =
+            reason === "stopped_by_employee"
+                ? "stopped"
+                : reason === "error" || reason === "connect_failed"
+                    ? "error"
+                    : "stopped";
         liveScreenClient
             .signal(config, { session_id: id, type })
             .catch(() => {});
@@ -269,6 +286,11 @@ function wireIpc() {
     });
     ipcMain.on("ls:connected", () => {
         if (!session) return;
+        session.connected = true;
+        if (session.connectTimer) {
+            clearTimeout(session.connectTimer);
+            session.connectTimer = null;
+        }
         liveScreenClient.signal(config, { session_id: session.id, type: "connected" }).catch(() => {});
     });
     ipcMain.on("ls:error", (_e, { message } = {}) => {

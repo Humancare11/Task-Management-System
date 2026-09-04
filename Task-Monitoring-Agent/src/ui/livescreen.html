@@ -23,16 +23,21 @@
             let stream = null;
             let sessionId = null;
             let started = false;
+            let connectTimer = null;
+            let done = false;
 
-            function teardown() {
+            function teardown(label) {
+                if (done) return;
+                done = true;
+                if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
                 try { if (stream) stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
                 try { if (pc) pc.close(); } catch (e) {}
                 stream = null;
                 pc = null;
-                set("stopped");
+                set(label || "stopped");
             }
 
-            window.liveScreen.onStop(teardown);
+            window.liveScreen.onStop(() => teardown("stopped"));
 
             window.liveScreen.onAnswer(async ({ sdp }) => {
                 if (!pc || !sdp) return;
@@ -72,14 +77,31 @@
                     pc.addEventListener("icecandidate", (e) => {
                         if (e.candidate) window.liveScreen.sendIce(e.candidate.toJSON());
                     });
-                    pc.addEventListener("connectionstatechange", () => {
-                        set("peer " + pc.connectionState);
-                        if (pc.connectionState === "connected") window.liveScreen.sendConnected();
-                        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-                            window.liveScreen.sendError("peer " + pc.connectionState);
-                            teardown();
+                    const onPeerState = () => {
+                        const st = pc.connectionState;
+                        set("peer " + st);
+                        if (st === "connected") {
+                            if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
+                            window.liveScreen.sendConnected();
                         }
+                        if (st === "failed" || st === "closed") {
+                            window.liveScreen.sendError("peer " + st);
+                            teardown("connection failed");
+                        }
+                    };
+                    pc.addEventListener("connectionstatechange", onPeerState);
+                    pc.addEventListener("iceconnectionstatechange", () => {
+                        if (pc.iceConnectionState === "failed") onPeerState();
                     });
+
+                    // No connection within ~40s (STUN-only can't cross a strict
+                    // NAT) -> give up cleanly instead of holding the capture open.
+                    connectTimer = setTimeout(() => {
+                        if (pc && pc.connectionState !== "connected") {
+                            window.liveScreen.sendError("connect timeout (no TURN?)");
+                            teardown("could not connect");
+                        }
+                    }, 40000);
 
                     const offer = await pc.createOffer();
                     await pc.setLocalDescription(offer);

@@ -215,6 +215,53 @@ test("agentSignal rejects an unknown / mismatched session", () => {
   });
 });
 
+test("connect timeout: offer but no 'connected' -> ends with connect_failed", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.agentSignal(42, { session_id: id, type: "offer", sdp: "OFFER" });
+  assert.equal(ls.getSession(id).status, "connecting");
+  t.mock.timers.tick(41 * 1000);
+  const s = ls.getSession(id);
+  assert.ok(s && (s.status === "ended" || s.status === "error"));
+  assert.equal(s.endReason, "connect_failed");
+});
+
+test("connect timeout is cleared once the peer connects", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.agentSignal(42, { session_id: id, type: "offer", sdp: "OFFER" });
+  ls.agentSignal(42, { session_id: id, type: "connected" });
+  t.mock.timers.tick(2 * 60 * 1000);
+  assert.equal(ls.getSession(id).status, "live");
+});
+
+test("STUN-only default is returned when LIVE_SCREEN_ICE_SERVERS is unset", () => {
+  const saved = process.env.LIVE_SCREEN_ICE_SERVERS;
+  delete process.env.LIVE_SCREEN_ICE_SERVERS;
+  const servers = ls.iceServers();
+  if (saved !== undefined) process.env.LIVE_SCREEN_ICE_SERVERS = saved;
+  assert.ok(Array.isArray(servers) && servers.length >= 1);
+  assert.ok(
+    servers.every((s) =>
+      [].concat(s.urls).every((u) => String(u).startsWith("stun:")),
+    ),
+    "default is STUN-only",
+  );
+});
+
+test("LIVE_SCREEN_ICE_SERVERS with a TURN entry is passed through", () => {
+  const saved = process.env.LIVE_SCREEN_ICE_SERVERS;
+  process.env.LIVE_SCREEN_ICE_SERVERS = JSON.stringify([
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "turn:turn.example.com:3478", username: "u", credential: "p" },
+  ]);
+  const servers = ls.iceServers();
+  if (saved === undefined) delete process.env.LIVE_SCREEN_ICE_SERVERS;
+  else process.env.LIVE_SCREEN_ICE_SERVERS = saved;
+  assert.equal(servers.length, 2);
+  assert.equal(servers[1].urls, "turn:turn.example.com:3478");
+});
+
 test("endAllForViewer tears down every session that viewer opened", () => {
   ls.createSession({
     id: "v1",

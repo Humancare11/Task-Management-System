@@ -29,24 +29,44 @@ const END_REASONS = {
   stopped_by_viewer: "Session ended.",
   stopped_by_employee: "The employee ended the session.",
   viewer_disconnected: "Disconnected.",
-  agent_unavailable: "The agent did not respond.",
+  agent_unavailable: "The agent did not respond — it may be offline.",
+  agent_shutdown: "The employee's agent stopped.",
   timeout: "The session timed out.",
   max_duration: "The session reached its maximum length.",
   superseded: "A newer session replaced this one.",
+  connect_failed:
+    "Couldn't establish the connection. This network likely needs a TURN server — set LIVE_SCREEN_ICE_SERVERS.",
+  not_enabled: "Live Screen was turned off.",
   error: "The session ended on an error.",
 };
+
+// Shown when the peer connection fails on the viewer side (STUN-only can't
+// cross a symmetric NAT / strict firewall).
+const NO_CONNECTION_HINT =
+  "Couldn't reach the employee's screen. Direct (STUN-only) connections fail on many corporate and mobile networks — add a TURN server via LIVE_SCREEN_ICE_SERVERS.";
+
+// How long the viewer waits for the peer connection before giving up. Slightly
+// longer than the agent's and the server's own timeouts.
+const VIEWER_CONNECT_TIMEOUT_MS = 50 * 1000;
 
 export default function LiveScreenViewer({ open, targetUserId, employeeName, onClose }) {
   const videoRef = useRef(null);
   const pcRef = useRef(null);
   const sessionIdRef = useRef(null);
+  const connectTimerRef = useRef(null);
   const [phase, setPhase] = useState("idle"); // idle | requesting | connecting | live | ended | error
   const [message, setMessage] = useState("");
+  const [stunOnly, setStunOnly] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   const teardown = useCallback(
     (notifyServer) => {
       const socket = getSocket();
       const sid = sessionIdRef.current;
+      if (connectTimerRef.current) {
+        clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = null;
+      }
       if (notifyServer && sid) socket.emit("livescreen:stop", { sessionId: sid });
       sessionIdRef.current = null;
       if (pcRef.current) {
@@ -116,7 +136,14 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
         return;
       }
       sessionIdRef.current = ack.sessionId;
-      const pc = new RTCPeerConnection({ iceServers: ack.iceServers || [] });
+      const servers = ack.iceServers || [];
+      const hasTurn = servers.some((s) =>
+        []
+          .concat(s.urls || [])
+          .some((u) => String(u).startsWith("turn:") || String(u).startsWith("turns:")),
+      );
+      setStunOnly(!hasTurn);
+      const pc = new RTCPeerConnection({ iceServers: servers });
       pcRef.current = pc;
       pc.addEventListener("track", (e) => {
         if (videoRef.current) videoRef.current.srcObject = e.streams[0];
@@ -129,14 +156,42 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
           });
         }
       });
+
+      const fail = (msg) => {
+        if (cancelled) return;
+        setPhase("error");
+        setMessage(msg);
+        teardown(true);
+      };
+
       pc.addEventListener("connectionstatechange", () => {
-        if (pc.connectionState === "connected") setPhase("live");
-        if (pc.connectionState === "failed") {
-          setPhase("error");
-          setMessage("Peer connection failed (check TURN configuration).");
-          teardown(true);
+        const st = pc.connectionState;
+        if (st === "connected") {
+          if (connectTimerRef.current) {
+            clearTimeout(connectTimerRef.current);
+            connectTimerRef.current = null;
+          }
+          setPhase("live");
+          setMessage("");
+        } else if (st === "failed") {
+          fail(NO_CONNECTION_HINT);
+        } else if (st === "disconnected") {
+          // transient — WebRTC may recover; surface it without tearing down yet
+          setMessage("Connection interrupted — trying to recover…");
         }
       });
+      pc.addEventListener("iceconnectionstatechange", () => {
+        if (pc.iceConnectionState === "failed") fail(NO_CONNECTION_HINT);
+      });
+
+      // Overall guard: never leave the viewer spinning if nothing ever connects
+      // (STUN-only on a strict NAT, lost signaling, backend timer suspended…).
+      connectTimerRef.current = setTimeout(() => {
+        if (pcRef.current && pcRef.current.connectionState !== "connected") {
+          fail(NO_CONNECTION_HINT);
+        }
+      }, VIEWER_CONNECT_TIMEOUT_MS);
+
       setPhase("connecting");
     });
 
@@ -148,9 +203,11 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
       socket.off("livescreen:ended", onEnded);
       teardown(true);
     };
-  }, [open, targetUserId, teardown]);
+  }, [open, targetUserId, teardown, attempt]);
 
   if (!open) return null;
+
+  const canRetry = phase === "error" || phase === "ended";
 
   const statusLine =
     {
@@ -212,17 +269,35 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-hair px-4 py-3 text-[11px] text-txt-muted">
-          <span className="flex items-center gap-1.5">
-            <Wifi size={12} /> Peer-to-peer · not recorded · the employee sees a
-            "your screen is being viewed" banner
+        <div className="flex items-center justify-between gap-3 border-t border-hair px-4 py-3 text-[11px] text-txt-muted">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Wifi size={12} className="shrink-0" />
+            <span className="truncate">
+              Peer-to-peer · not recorded · the employee sees a "your screen is
+              being viewed" banner
+              {stunOnly && " · STUN only (no TURN — may not connect on all networks)"}
+            </span>
           </span>
-          <button
-            onClick={onClose}
-            className="rounded-md border border-hair px-3 py-1.5 text-xs font-semibold text-txt-primary hover:bg-surface-2"
-          >
-            {phase === "live" || phase === "connecting" ? "Stop & close" : "Close"}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {canRetry && (
+              <button
+                onClick={() => {
+                  setMessage("");
+                  setPhase("requesting");
+                  setAttempt((n) => n + 1);
+                }}
+                className="rounded-md border border-accentblue/40 bg-accentblue/10 px-3 py-1.5 text-xs font-semibold text-accentblue hover:bg-accentblue/20"
+              >
+                Retry
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-md border border-hair px-3 py-1.5 text-xs font-semibold text-txt-primary hover:bg-surface-2"
+            >
+              {phase === "live" || phase === "connecting" ? "Stop & close" : "Close"}
+            </button>
+          </div>
         </div>
       </div>
     </div>,

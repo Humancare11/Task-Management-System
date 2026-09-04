@@ -58,6 +58,10 @@ const DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS = 15;
 // hard-capped at liveScreenMaxSessionSeconds regardless of the viewer.
 const DEFAULT_LIVE_SCREEN_POLL_INTERVAL_SECONDS = 2;
 const DEFAULT_LIVE_SCREEN_MAX_SESSION_SECONDS = 30 * 60;
+// Local safety net for a peer connection that never establishes (STUN-only on a
+// strict NAT, etc.) — slightly longer than the server's own connect timeout so
+// the server usually reports the failure first.
+const DEFAULT_LIVE_SCREEN_CONNECT_TIMEOUT_SECONDS = 45;
 
 function positiveNumberOr(value, fallback) {
     const n = Number(value);
@@ -192,6 +196,10 @@ function buildConfig(fallback = {}) {
         liveScreenMaxSessionSeconds: positiveNumberOr(
             layered("LIVE_SCREEN_MAX_SESSION_SECONDS", "liveScreenMaxSessionSeconds"),
             DEFAULT_LIVE_SCREEN_MAX_SESSION_SECONDS,
+        ),
+        liveScreenConnectTimeoutSeconds: positiveNumberOr(
+            layered("LIVE_SCREEN_CONNECT_TIMEOUT_SECONDS", "liveScreenConnectTimeoutSeconds"),
+            DEFAULT_LIVE_SCREEN_CONNECT_TIMEOUT_SECONDS,
         ),
     };
 }

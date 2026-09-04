@@ -21,6 +21,10 @@ const { canViewContent } = require("./monitoringContent");
 const num = (v, d) => (Number(v) > 0 ? Number(v) : d);
 const MAX_SESSION_MS = num(process.env.LIVE_SCREEN_MAX_SESSION_MS, 30 * 60 * 1000);
 const REQUEST_TIMEOUT_MS = num(process.env.LIVE_SCREEN_REQUEST_TIMEOUT_MS, 45 * 1000);
+// After the offer is exchanged, the peers have this long to actually connect.
+// STUN-only fails here on strict/symmetric-NAT networks (no TURN relay) — the
+// session ends cleanly with reason "connect_failed" instead of hanging.
+const CONNECT_TIMEOUT_MS = num(process.env.LIVE_SCREEN_CONNECT_TIMEOUT_MS, 40 * 1000);
 const ENDED_GRACE_MS = 15 * 1000; // keep an ended session briefly so a late poll sees "stop"
 
 /** ICE/TURN servers for both peers.
@@ -108,6 +112,7 @@ function authorizeViewer(p) {
 
 function clearTimers(s) {
   if (s.timers.request) clearTimeout(s.timers.request);
+  if (s.timers.connect) clearTimeout(s.timers.connect);
   if (s.timers.max) clearTimeout(s.timers.max);
   s.timers = {};
 }
@@ -213,6 +218,13 @@ function agentSignal(agentId, msg) {
       }
       s.status = "connecting";
       s.signal.offer = msg.sdp || null;
+      if (!s.timers.connect) {
+        s.timers.connect = setTimeout(
+          () => endSession(s.id, "connect_failed"),
+          CONNECT_TIMEOUT_MS,
+        );
+        if (s.timers.connect.unref) s.timers.connect.unref();
+      }
       emitter.emit("session", { type: "offer", session: publicView(s), sdp: msg.sdp });
       return { ok: true };
     case "ice":
@@ -224,6 +236,10 @@ function agentSignal(agentId, msg) {
       });
       return { ok: true };
     case "connected":
+      if (s.timers.connect) {
+        clearTimeout(s.timers.connect);
+        s.timers.connect = null;
+      }
       if (s.status !== "live") {
         s.status = "live";
         s.connectedAt = new Date();
