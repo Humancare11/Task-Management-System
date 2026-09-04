@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Power,
   AppWindow,
   Globe,
@@ -11,6 +12,7 @@ import {
   MonitorOff,
   Clock,
   AlertTriangle,
+  ScrollText,
 } from "lucide-react";
 import AppLayout from "../../components/layout/AppLayout.jsx";
 import PageHeader from "../../components/ui/PageHeader.jsx";
@@ -30,8 +32,10 @@ import {
   isoDate,
   shiftIsoDate,
   summaryStatus,
-  INTERVAL_META,
   SCREEN_OFF_REASON_LABEL,
+  buildAppWebGroups,
+  buildActivityLog,
+  collapseWithRecent,
 } from "./monitoringUtils.js";
 
 function StatTile({ icon: Icon, label, value, hint, tone }) {
@@ -104,46 +108,174 @@ function PeriodList({ title, icon: Icon, rows, emptyText }) {
   );
 }
 
+const DOMAIN_LIMIT = 6;
+const APP_LIMIT = 7;
+const LOG_INITIAL = 60;
+
+const TONE_DOT = {
+  success: "bg-emerald-500",
+  warning: "bg-amber-400",
+  neutral: "bg-slate-400",
+};
+
+// One application in the unified "Applications & Websites" list. A browser's
+// per-domain rows are nested beneath it; the parent bar is the application's own
+// foreground time and the child bars are a breakdown of that same time.
+function AppGroup({ group, total }) {
+  const [open, setOpen] = useState(false);
+  const domains = group.domains || [];
+  const shownDomains = open ? domains : domains.slice(0, DOMAIN_LIMIT);
+  const parentTotal = group.seconds || 1;
+
+  return (
+    <li className="rounded-lg border border-hair bg-surface-2/40 px-3 py-2.5">
+      <Bar
+        label={group.label}
+        seconds={group.seconds}
+        total={total}
+        icon={group.browserId ? Globe : AppWindow}
+        sub={`${formatHm(group.active)} active · ${group.sessions} session${
+          group.sessions === 1 ? "" : "s"
+        }${group.lastSeen ? ` · last ${formatClock(group.lastSeen)}` : ""}`}
+      />
+
+      {domains.length > 0 && (
+        <ul className="mt-2 space-y-1.5 border-l border-hair pl-3">
+          {shownDomains.map((d) => (
+            <li key={d.label}>
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="flex min-w-0 items-center gap-1.5 text-txt-primary">
+                  <span
+                    className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                      d.isPrivate ? "bg-slate-400" : "bg-accentblue/70"
+                    }`}
+                  />
+                  <span className="truncate">{d.label}</span>
+                </span>
+                <span className="shrink-0 text-txt-muted">
+                  {formatHm(d.seconds)} · {d.sessions}x
+                </span>
+              </div>
+              <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className="h-full rounded-full bg-accentblue/50"
+                  style={{
+                    width: `${Math.min(100, (d.seconds / parentTotal) * 100)}%`,
+                  }}
+                />
+              </div>
+            </li>
+          ))}
+          {domains.length > DOMAIN_LIMIT && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="text-[11px] font-semibold text-accentblue hover:underline"
+              >
+                {open ? "Show fewer sites" : `+${domains.length - DOMAIN_LIMIT} more sites`}
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+// Chronological "Activity Logs" — scrollable, built from the same daily
+// response (web sessions + non-browser app sessions + idle/screen-off).
+function ActivityLogPanel({ rows }) {
+  const [expanded, setExpanded] = useState(false);
+  const scrollRef = useRef(null);
+  // Chronological (oldest→newest). When truncated, keep the MOST RECENT slice
+  // visible and let "See More" reveal earlier history.
+  const shown = expanded ? rows : rows.slice(-LOG_INITIAL);
+
+  // Land on the newest entry when the day's data (re)loads.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [rows]);
+
+  return (
+    <div className="flex min-h-0 flex-col">
+      <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-txt-muted">
+        <ScrollText size={13} /> Activity Logs ({rows.length})
+      </h4>
+      {rows.length === 0 ? (
+        <p className="text-xs text-txt-muted">No activity recorded for this day.</p>
+      ) : (
+        <>
+          <ol
+            ref={scrollRef}
+            className="max-h-[560px] space-y-1 overflow-y-auto rounded-lg border border-hair bg-surface-2/40 p-2"
+          >
+            {shown.map((r, i) => (
+              <li
+                key={`${r.startMs}-${i}`}
+                className="flex items-start gap-2 rounded-md px-2 py-1.5 text-[11px] hover:bg-surface-2"
+              >
+                <span
+                  className={`mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                    TONE_DOT[r.tone] || "bg-slate-400"
+                  }`}
+                />
+                <span className="w-[92px] shrink-0 font-mono text-txt-muted">
+                  {formatClock(r.startMs)}
+                </span>
+                <span className="w-[92px] shrink-0 font-mono text-txt-muted">
+                  {formatClock(r.endMs)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-txt-primary">
+                    {r.app || (r.status === "Idle" ? "Idle" : r.status)}
+                  </span>
+                  {r.domain && (
+                    <span className="text-txt-muted"> · {r.domain}</span>
+                  )}
+                  {r.app && r.status !== "Active" && (
+                    <span className="text-txt-muted"> · {r.status}</span>
+                  )}
+                </span>
+                <span className="shrink-0 text-txt-muted">{formatHm(r.seconds)}</span>
+              </li>
+            ))}
+          </ol>
+          {rows.length > LOG_INITIAL && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-2 self-start text-[11px] font-semibold text-accentblue hover:underline"
+            >
+              {expanded
+                ? "See less"
+                : `See More (${rows.length - LOG_INITIAL} earlier entries)`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function DeviceSection({ device, overlapNote }) {
   const pc = device.pc_session;
   const intervals = device.intervals || [];
+  const [showAllApps, setShowAllApps] = useState(false);
 
-  const appAgg = useMemo(() => {
-    const map = new Map();
-    for (const a of device.app_sessions || []) {
-      const k = a.application_name || "Unknown";
-      const e = map.get(k) || { label: k, seconds: 0, active: 0, sessions: 0 };
-      e.seconds += a.duration_seconds;
-      e.active += a.active_seconds;
-      e.sessions += 1;
-      map.set(k, e);
-    }
-    return [...map.values()].sort((x, y) => y.seconds - x.seconds);
-  }, [device.app_sessions]);
+  // Unified Applications & Websites + chronological logs — both derived purely
+  // from this device's derived sessions/intervals (no hardcoded list).
+  const groups = useMemo(() => buildAppWebGroups(device), [device]);
+  const activityLog = useMemo(() => buildActivityLog(device), [device]);
 
-  const webAgg = useMemo(() => {
-    const byBrowser = new Map();
-    for (const w of device.web_sessions || []) {
-      const b = w.browser || "browser";
-      if (!byBrowser.has(b)) byBrowser.set(b, new Map());
-      const key = w.is_private ? "Private Browsing" : w.domain || "Unknown";
-      const m = byBrowser.get(b);
-      const e = m.get(key) || { label: key, seconds: 0, sessions: 0, isPrivate: w.is_private };
-      e.seconds += w.duration_seconds;
-      e.sessions += 1;
-      m.set(key, e);
-    }
-    return [...byBrowser.entries()].map(([browser, m]) => ({
-      browser,
-      rows: [...m.values()].sort((x, y) => y.seconds - x.seconds),
-    }));
-  }, [device.web_sessions]);
+  const appTotal = groups.reduce((s, g) => s + g.seconds, 0) || 1;
+  const shownGroups = showAllApps
+    ? groups
+    : collapseWithRecent(groups, { limit: APP_LIMIT, recent: 3 });
 
   const idleRows = intervals.filter((i) => i.type === "idle");
   const screenOffRows = intervals.filter((i) => i.type === "screen_off");
   const untrackedRows = intervals.filter((i) => i.type === "untracked");
-  const totalForBars = pc.active_seconds + pc.idle_seconds || 1;
-  const appTotal = appAgg.reduce((s, a) => s + a.seconds, 0) || 1;
 
   return (
     <section className="rounded-xl border border-hair bg-surface-1 p-5">
@@ -209,64 +341,47 @@ function DeviceSection({ device, overlapNote }) {
         </p>
       )}
 
-      <div className="mt-5 grid gap-6 lg:grid-cols-2">
+      {/* LEFT: unified Applications & Websites   RIGHT: Activity Logs */}
+      <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-txt-muted">
-            <AppWindow size={13} /> Applications ({appAgg.length})
+            <AppWindow size={13} /> Applications &amp; Websites ({groups.length})
           </h4>
-          {appAgg.length === 0 ? (
-            <p className="text-xs text-txt-muted">No application activity.</p>
+          {groups.length === 0 ? (
+            <p className="text-xs text-txt-muted">No application or website activity.</p>
           ) : (
-            <ul className="space-y-2.5">
-              {appAgg.map((a) => (
-                <Bar
-                  key={a.label}
-                  label={a.label}
-                  seconds={a.seconds}
-                  total={appTotal}
-                  sub={`${formatHm(a.active)} active · ${a.sessions} session${a.sessions === 1 ? "" : "s"}`}
-                />
-              ))}
-            </ul>
+            <>
+              <ul className="space-y-2">
+                {shownGroups.map((g) => (
+                  <AppGroup key={g.key} group={g} total={appTotal} />
+                ))}
+              </ul>
+              {groups.length > shownGroups.length && !showAllApps && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllApps(true)}
+                  className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-accentblue hover:underline"
+                >
+                  <ChevronDown size={13} /> See More ({groups.length - shownGroups.length} more)
+                </button>
+              )}
+              {showAllApps && groups.length > APP_LIMIT && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllApps(false)}
+                  className="mt-2 text-[11px] font-semibold text-accentblue hover:underline"
+                >
+                  See less
+                </button>
+              )}
+            </>
           )}
         </div>
 
-        <div>
-          <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-txt-muted">
-            <Globe size={13} /> Websites
-          </h4>
-          {webAgg.length === 0 ? (
-            <p className="text-xs text-txt-muted">No website activity.</p>
-          ) : (
-            <div className="space-y-3">
-              {webAgg.map(({ browser, rows }) => {
-                const bt = rows.reduce((s, r) => s + r.seconds, 0) || 1;
-                return (
-                  <div key={browser}>
-                    <p className="mb-1 text-[11px] font-semibold capitalize text-txt-muted">
-                      {browser}
-                    </p>
-                    <ul className="space-y-2">
-                      {rows.map((r) => (
-                        <Bar
-                          key={r.label}
-                          label={r.label}
-                          seconds={r.seconds}
-                          total={bt}
-                          indent
-                          sub={`${r.sessions} session${r.sessions === 1 ? "" : "s"}`}
-                        />
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <ActivityLogPanel rows={activityLog} />
       </div>
 
-      <div className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <PeriodList
           title="Idle periods"
           icon={Moon}
