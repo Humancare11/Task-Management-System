@@ -110,6 +110,89 @@ test("non-owner needs a live, matching grant", () => {
   );
 });
 
+// --- prepareViewerRequest: one decision, a specific code per failure ---
+
+const OK_INPUTS = {
+  gateApproved: true,
+  viewer: OWNER,
+  organizationId: 9,
+  targetUserId: 5,
+  orgSettings: { live_screen_enabled: true },
+  grants: [],
+  agent: { id: 42 },
+  consent: { id: 1, accepted_at: "2026-09-04T00:00:00Z" },
+};
+
+test("prepareViewerRequest: happy path -> ok + accessVia + numeric target", () => {
+  const r = ls.prepareViewerRequest({ ...OK_INPUTS });
+  assert.deepEqual(r, { ok: true, accessVia: "owner", targetUserId: 5 });
+});
+
+test("prepareViewerRequest: a specific code for every missing precondition", () => {
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, viewer: { role: "owner" } }).code,
+    "unauthenticated",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, organizationId: undefined }).code,
+    "unauthenticated",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, targetUserId: "abc" }).code,
+    "bad_request",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, gateApproved: false }).code,
+    "not_enabled",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, orgSettings: { live_screen_enabled: false } }).code,
+    "not_enabled",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, orgSettings: null }).code,
+    "not_enabled",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, viewer: MEMBER, grants: [] }).code,
+    "not_authorized",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, agent: null }).code,
+    "agent_offline",
+  );
+  assert.equal(
+    ls.prepareViewerRequest({ ...OK_INPUTS, consent: null }).code,
+    "consent_missing",
+  );
+});
+
+test("prepareViewerRequest: a non-owner with a live grant is allowed", () => {
+  const r = ls.prepareViewerRequest({
+    ...OK_INPUTS,
+    viewer: MEMBER,
+    grants: [liveGrant],
+  });
+  assert.deepEqual(r, { ok: true, accessVia: "grant", targetUserId: 5 });
+});
+
+test("isSchemaError recognises missing table / column, not other errors", () => {
+  assert.equal(
+    ls.isSchemaError({ name: "SequelizeDatabaseError", original: { code: "ER_NO_SUCH_TABLE" } }),
+    true,
+  );
+  assert.equal(
+    ls.isSchemaError({ name: "SequelizeDatabaseError", original: { code: "ER_BAD_FIELD_ERROR" } }),
+    true,
+  );
+  assert.equal(
+    ls.isSchemaError({ name: "SequelizeDatabaseError", original: { code: "ER_DUP_ENTRY" } }),
+    false,
+  );
+  assert.equal(ls.isSchemaError(new Error("boom")), false);
+  assert.equal(ls.isSchemaError(null), false);
+});
+
 // --- session lifecycle + signaling relay ------------------------------
 
 function newSession(over = {}) {

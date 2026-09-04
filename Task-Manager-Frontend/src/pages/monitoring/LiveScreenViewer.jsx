@@ -23,6 +23,9 @@ const REQUEST_ERRORS = {
   consent_missing: "The employee has not yet accepted the live-screen notice.",
   agent_offline: "The employee's agent is offline.",
   bad_request: "Could not start the session.",
+  unauthenticated: "Your session is missing organization context — sign in again.",
+  not_ready:
+    "Live Screen isn't set up on the server (database migrations not applied). Ask an admin to run the pending migrations.",
   server_error: "Server error starting the session.",
 };
 const END_REASONS = {
@@ -132,7 +135,11 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
       if (cancelled) return;
       if (!ack || !ack.ok) {
         setPhase("error");
-        setMessage(REQUEST_ERRORS[ack && ack.code] || "Could not start the session.");
+        setMessage(
+          (ack && ack.detail) ||
+            REQUEST_ERRORS[ack && ack.code] ||
+            "Could not start the session.",
+        );
         return;
       }
       sessionIdRef.current = ack.sessionId;

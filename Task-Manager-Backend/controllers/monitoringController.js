@@ -1415,6 +1415,102 @@ exports.getAgentLiveScreen = async (req, res) => {
   }
 };
 
+// GET /api/monitoring/livescreen/diagnostics?user_id=<employee>
+// Owner/admin. One call that reports every precondition for Live Screen so a
+// failed session can be diagnosed without server access.
+exports.getLiveScreenDiagnostics = async (req, res) => {
+  try {
+    const organizationId = req.user.organization_id;
+    const targetUserId = req.query.user_id
+      ? parseInt(req.query.user_id, 10)
+      : null;
+
+    const schema = await liveScreen.schemaHealth(sequelize);
+
+    let orgSettings = null;
+    try {
+      orgSettings = await MonitoringOrgSetting.findOne({
+        where: { organization_id: organizationId },
+        attributes: ["organization_id", "live_screen_enabled"],
+        raw: true,
+      });
+    } catch (e) {
+      schema.error = schema.error || e.message;
+    }
+
+    const iceServers = liveScreen.iceServers();
+    const hasTurn = iceServers.some((s) =>
+      []
+        .concat(s.urls || [])
+        .some((u) => /^turns?:/i.test(String(u))),
+    );
+
+    let target = null;
+    if (targetUserId) {
+      const [agent, consent] = await Promise.all([
+        MonitoringAgent.findOne({
+          where: {
+            organization_id: organizationId,
+            user_id: targetUserId,
+            status: "active",
+          },
+          order: [["last_seen_at", "DESC"]],
+          raw: true,
+        }),
+        MonitoringConsent.findOne({
+          where: {
+            user_id: targetUserId,
+            document_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+          },
+          raw: true,
+        }).catch(() => null),
+      ]);
+      const seenMsAgo =
+        agent && agent.last_seen_at
+          ? Date.now() - new Date(agent.last_seen_at).getTime()
+          : null;
+      target = {
+        user_id: targetUserId,
+        agent_registered: Boolean(agent),
+        agent_id: agent ? agent.id : null,
+        agent_last_seen_at: agent ? agent.last_seen_at : null,
+        agent_online: Boolean(seenMsAgo != null && seenMsAgo < 90 * 1000),
+        consent_recorded: Boolean(consent),
+        consent_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+        consent_accepted_at: consent ? consent.accepted_at : null,
+      };
+    }
+
+    return res.json({
+      legal_gate_open: LIVE_SCREEN_LEGALLY_APPROVED,
+      schema,
+      org_setting: {
+        row_exists: Boolean(orgSettings),
+        live_screen_enabled: Boolean(orgSettings && orgSettings.live_screen_enabled),
+      },
+      ice_servers: iceServers,
+      has_turn: hasTurn,
+      active_sessions: liveScreen.activeSessionCount(),
+      target,
+      viewer: {
+        id: req.user.id,
+        role: req.user.role,
+        is_owner: req.user.role === "owner",
+      },
+      ready:
+        LIVE_SCREEN_LEGALLY_APPROVED &&
+        schema.sessions_table &&
+        schema.org_setting_column &&
+        Boolean(orgSettings && orgSettings.live_screen_enabled),
+    });
+  } catch (error) {
+    console.error("getLiveScreenDiagnostics error:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error.", detail: error.message });
+  }
+};
+
 // POST /api/monitoring/agent/livescreen/signal
 // Body: { agent_uuid, agent_secret, session_id, type, sdp?, candidate? }
 //   type: "offer" | "ice" | "connected" | "stopped" | "error"

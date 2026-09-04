@@ -87,6 +87,43 @@ function activeByTarget(organizationId, targetUserId) {
 }
 
 /**
+ * Pure end-to-end check of one viewer request. The caller has already fetched
+ * orgSettings / grants / agent / consent from the DB; this decides yes/no and
+ * why, with a specific code for each failure so the dashboard and logs show the
+ * real cause (never a generic error).
+ *
+ * @returns {{ ok:true, accessVia:"owner"|"grant", targetUserId:number }
+ *          | { ok:false, code:string }}
+ *   codes: unauthenticated | bad_request | not_enabled | not_authorized |
+ *          agent_offline | consent_missing
+ */
+function prepareViewerRequest(p) {
+  const viewer = p.viewer || {};
+  if (!viewer.id || !p.organizationId) return { ok: false, code: "unauthenticated" };
+
+  const targetUserId = Number(p.targetUserId);
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    return { ok: false, code: "bad_request" };
+  }
+
+  const authz = authorizeViewer({
+    gateApproved: p.gateApproved,
+    orgSettings: p.orgSettings,
+    viewer,
+    organizationId: p.organizationId,
+    targetUserId,
+    grants: p.grants,
+    now: p.now,
+  });
+  if (!authz.ok) return authz;
+
+  if (!p.agent) return { ok: false, code: "agent_offline" };
+  if (!p.consent) return { ok: false, code: "consent_missing" };
+
+  return { ok: true, accessVia: authz.accessVia, targetUserId };
+}
+
+/**
  * Pure authorization for starting a live-screen session.
  * @returns {{ ok:true, accessVia:"owner"|"grant" } | { ok:false, code:string }}
  */
@@ -286,6 +323,49 @@ function endAllForViewer(viewerUserId, reason = "viewer_disconnected") {
   }
 }
 
+function activeSessionCount() {
+  let n = 0;
+  for (const s of sessions.values()) {
+    if (s.status !== "ended" && s.status !== "error") n += 1;
+  }
+  return n;
+}
+
+/**
+ * Is the Live Screen schema actually present? The feature's migrations
+ * (monitoring_live_screen_sessions + monitoring_org_settings.live_screen_enabled)
+ * are separate from the code deploy — on a Passenger host `npm start`
+ * (which runs migrate:prod) is not executed, so they can be missing.
+ * @param {import("sequelize").Sequelize} sequelize
+ */
+async function schemaHealth(sequelize) {
+  const qi = sequelize.getQueryInterface();
+  const out = { sessions_table: false, org_setting_column: false, error: null };
+  try {
+    await qi.describeTable("monitoring_live_screen_sessions");
+    out.sessions_table = true;
+  } catch {
+    /* missing */
+  }
+  try {
+    const cols = await qi.describeTable("monitoring_org_settings");
+    out.org_setting_column = Boolean(cols && cols.live_screen_enabled);
+  } catch (err) {
+    out.error = err.message;
+  }
+  return out;
+}
+
+/** true when a caught error means "the DB schema isn't there yet". */
+function isSchemaError(err) {
+  if (!err) return false;
+  const code = err.original && err.original.code;
+  return (
+    err.name === "SequelizeDatabaseError" &&
+    ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"].includes(code)
+  );
+}
+
 function _reset() {
   for (const s of sessions.values()) clearTimers(s);
   sessions.clear();
@@ -296,6 +376,7 @@ module.exports = {
   emitter,
   iceServers,
   authorizeViewer,
+  prepareViewerRequest,
   createSession,
   endSession,
   agentDirective,
@@ -305,6 +386,9 @@ module.exports = {
   agentIceFor,
   getSession,
   endAllForViewer,
+  activeSessionCount,
+  schemaHealth,
+  isSchemaError,
   MAX_SESSION_MS,
   _reset,
 };

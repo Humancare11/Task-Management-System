@@ -21,6 +21,7 @@ const {
   getMonitoringContent,
   getAgentLiveScreen,
   submitAgentLiveScreenSignal,
+  getLiveScreenDiagnostics,
 } = require("../controllers/monitoringController");
 
 // The raw-event ingest can post batches larger than the global 100kb JSON
@@ -90,6 +91,16 @@ router.post("/agent/content", contentJsonParser, submitMonitoringContent);
 // agent never captures. Media is peer-to-peer and never reaches the server.
 router.post("/agent/livescreen", getAgentLiveScreen);
 router.post("/agent/livescreen/signal", submitAgentLiveScreenSignal);
+
+// Live Screen — precondition diagnostics (owner/admin). Reports the legal gate,
+// schema/migration state, per-org setting, ICE/TURN config, and (with user_id)
+// the target's agent + consent state.
+router.get(
+  "/livescreen/diagnostics",
+  requireAuth,
+  requireRole("owner", "admin"),
+  getLiveScreenDiagnostics
+);
 
 // DEPRECATED (Phase 5) — read-only historical access to monitoring_activities.
 // The dashboard reads /summary + /daily. Owner/admin only. Responses carry

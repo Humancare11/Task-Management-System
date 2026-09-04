@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
+const { sequelize } = require("./config/db");
 const {
   Project,
   Task,
@@ -15,6 +16,7 @@ const liveScreen = require("./services/monitoringLiveScreen");
 const {
   LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
 } = require("./config/liveScreenConsentDocument");
+const { LIVE_SCREEN_LEGALLY_APPROVED } = require("./config/liveScreenGate");
 
 let io = null;
 
@@ -90,8 +92,40 @@ function initSocket(server) {
   });
 
   wireLiveScreenRelay();
+  reportLiveScreenReadiness();
 
   return io;
+}
+
+// Boot-time check: the Live Screen migrations (monitoring_live_screen_sessions +
+// monitoring_org_settings.live_screen_enabled) ship in code but only run via
+// `npm run migrate:prod`. On a Passenger host that is NOT executed on deploy,
+// so the tables can be missing — which surfaces later as a "server error" when
+// a viewer clicks Live Screen. Make that loud at startup instead.
+async function reportLiveScreenReadiness() {
+  if (!LIVE_SCREEN_LEGALLY_APPROVED) {
+    console.log("[live-screen] legal gate is closed — feature disabled.");
+    return;
+  }
+  try {
+    const h = await liveScreen.schemaHealth(sequelize);
+    if (h.sessions_table && h.org_setting_column) {
+      console.log("[live-screen] enabled; schema OK.");
+      return;
+    }
+    console.error(
+      "\n" +
+        "  ┌─────────────────────────────────────────────────────────────────┐\n" +
+        "  │  LIVE SCREEN SCHEMA IS MISSING — the feature will fail.          │\n" +
+        `  │   monitoring_live_screen_sessions table : ${h.sessions_table ? "present" : "MISSING "}              │\n` +
+        `  │   monitoring_org_settings.live_screen_enabled : ${h.org_setting_column ? "present" : "MISSING "}       │\n` +
+        "  │  Run the pending migrations on this database:                    │\n" +
+        "  │    npx sequelize-cli db:migrate --env production                 │\n" +
+        "  └─────────────────────────────────────────────────────────────────┘\n",
+    );
+  } catch (err) {
+    console.error("[live-screen] schema check failed:", err.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -160,46 +194,49 @@ function wireLiveScreenSocket(socket) {
 
   socket.on("livescreen:request", async ({ targetUserId } = {}, ack) => {
     const reply = typeof ack === "function" ? ack : () => {};
+    const target = Number(targetUserId);
     try {
-      const target = Number(targetUserId);
-      if (!target) return reply({ ok: false, code: "bad_request" });
-
       const [orgSettings, grants, agent, consent] = await Promise.all([
         MonitoringOrgSetting.findOne({
           where: { organization_id: user.organization_id },
+          attributes: ["organization_id", "live_screen_enabled"],
           raw: true,
         }),
         MonitoringContentGrant.findAll({
           where: { organization_id: user.organization_id, grantee_user_id: user.id },
           raw: true,
         }),
-        MonitoringAgent.findOne({
-          where: {
-            organization_id: user.organization_id,
-            user_id: target,
-            status: "active",
-          },
-          order: [["last_seen_at", "DESC"]],
-        }),
-        MonitoringConsent.findOne({
-          where: {
-            user_id: target,
-            document_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
-          },
-          raw: true,
-        }),
+        Number.isInteger(target) && target > 0
+          ? MonitoringAgent.findOne({
+              where: {
+                organization_id: user.organization_id,
+                user_id: target,
+                status: "active",
+              },
+              order: [["last_seen_at", "DESC"]],
+            })
+          : null,
+        Number.isInteger(target) && target > 0
+          ? MonitoringConsent.findOne({
+              where: {
+                user_id: target,
+                document_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+              },
+              raw: true,
+            })
+          : null,
       ]);
 
-      const authz = liveScreen.authorizeViewer({
-        orgSettings,
+      const decision = liveScreen.prepareViewerRequest({
         viewer: user,
         organizationId: user.organization_id,
         targetUserId: target,
+        orgSettings,
         grants,
+        agent,
+        consent,
       });
-      if (!authz.ok) return reply({ ok: false, code: authz.code });
-      if (!agent) return reply({ ok: false, code: "agent_offline" });
-      if (!consent) return reply({ ok: false, code: "consent_missing" });
+      if (!decision.ok) return reply({ ok: false, code: decision.code });
 
       const id = crypto.randomUUID();
       await MonitoringLiveScreenSession.create({
@@ -209,7 +246,7 @@ function wireLiveScreenSocket(socket) {
         target_user_id: target,
         agent_id: agent.id,
         status: "requested",
-        access_via: authz.accessVia,
+        access_via: decision.accessVia,
         viewer_ip:
           (socket.handshake.headers["x-forwarded-for"] || "")
             .split(",")[0]
@@ -224,12 +261,30 @@ function wireLiveScreenSocket(socket) {
         viewer: user,
         targetUserId: target,
         agentId: agent.id,
-        accessVia: authz.accessVia,
+        accessVia: decision.accessVia,
       });
 
       reply({ ok: true, sessionId: id, iceServers: liveScreen.iceServers() });
     } catch (err) {
-      console.error("livescreen:request error:", err.message);
+      // Full detail in the log so the exact cause is visible, not just .message.
+      console.error("livescreen:request FAILED", {
+        viewer: user && user.id,
+        org: user && user.organization_id,
+        target,
+        name: err && err.name,
+        db_code: err && err.original && err.original.code,
+        sql: err && err.sql,
+        message: err && err.message,
+      });
+      if (liveScreen.isSchemaError(err)) {
+        return reply({
+          ok: false,
+          code: "not_ready",
+          detail:
+            "Live Screen database migrations have not been applied on this server. " +
+            "Run: npx sequelize-cli db:migrate --env production",
+        });
+      }
       reply({ ok: false, code: "server_error" });
     }
   });
