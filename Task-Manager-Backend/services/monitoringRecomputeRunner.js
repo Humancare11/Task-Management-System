@@ -27,10 +27,13 @@ const { recomputeDay } = require("./monitoringDerivation");
 const { enqueueRecompute } = require("../utils/monitoringRecompute");
 const { serverLocalDate } = require("../utils/monitoringTime");
 
+// Lowered 30s -> 15s. This timer is only the backstop — every event ingest also
+// kicks a drain — so on a shared host that suspends idle timers the real cadence
+// still comes from traffic; 15s just tightens the quiet-period case.
 const DRAIN_INTERVAL_MS =
   Number(process.env.MONITORING_DRAIN_INTERVAL_MS) > 0
     ? Number(process.env.MONITORING_DRAIN_INTERVAL_MS)
-    : 30 * 1000;
+    : 15 * 1000;
 const NIGHTLY_INTERVAL_MS =
   Number(process.env.MONITORING_NIGHTLY_INTERVAL_MS) > 0
     ? Number(process.env.MONITORING_NIGHTLY_INTERVAL_MS)

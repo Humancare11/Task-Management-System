@@ -18,10 +18,14 @@
 
 const { MonitoringRecomputeQueue } = require("../models");
 
+// Lowered 45s -> 15s so derived sessions/summaries for the current day catch up
+// within ~15-30s of an event batch arriving. Coalescing still holds: a burst of
+// ingests for the same (agent, day) collapses onto one row and only pushes
+// not_before forward by 15s each time.
 const DEBOUNCE_MS =
   Number(process.env.MONITORING_RECOMPUTE_DEBOUNCE_MS) > 0
     ? Number(process.env.MONITORING_RECOMPUTE_DEBOUNCE_MS)
-    : 45 * 1000;
+    : 15 * 1000;
 
 /**
  * @param {object} params

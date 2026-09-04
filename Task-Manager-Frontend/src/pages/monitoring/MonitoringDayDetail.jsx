@@ -299,6 +299,12 @@ function DeviceSection({ device, overlapNote }) {
   );
 }
 
+// How often the day-detail view silently re-fetches while it is open and the
+// browser tab is visible. ~30s keeps captured searches / prompts and derived
+// sessions near-live without meaningfully loading the server (one viewer, a
+// couple of small GETs per interval).
+const AUTO_REFRESH_MS = 30 * 1000;
+
 // §5b captured content. Renders NOTHING unless the server returns 200 — which
 // only happens when the legal gate is open AND the viewer is authorized (owner
 // or an active grant). A 403 / 501 / any error keeps the panel invisible. Every
@@ -308,19 +314,35 @@ function ContentPanel({ userId, date }) {
 
   useEffect(() => {
     let alive = true;
-    setState({ status: "loading", items: [], via: null });
-    getMonitoringContent({ user_id: userId, from: date, to: date })
-      .then((res) => {
-        if (!alive) return;
-        setState({
-          status: "ok",
-          items: res.data?.items || [],
-          via: res.data?.access_via || null,
+    // Show the loading state only on a target change, not on the poll — a silent
+    // refetch must not make the panel flicker out and back in.
+    setState((prev) =>
+      prev.status === "ok" ? prev : { status: "loading", items: [], via: null },
+    );
+
+    const fetchOnce = () => {
+      getMonitoringContent({ user_id: userId, from: date, to: date })
+        .then((res) => {
+          if (!alive) return;
+          setState({
+            status: "ok",
+            items: res.data?.items || [],
+            via: res.data?.access_via || null,
+          });
+        })
+        .catch(() => {
+          // Keep a panel that has already rendered; only hide if it never loaded.
+          if (alive) setState((prev) => (prev.status === "ok" ? prev : { status: "hidden", items: [], via: null }));
         });
-      })
-      .catch(() => alive && setState({ status: "hidden", items: [], via: null }));
+    };
+
+    fetchOnce();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") fetchOnce();
+    }, AUTO_REFRESH_MS);
     return () => {
       alive = false;
+      clearInterval(timer);
     };
   }, [userId, date]);
 
@@ -389,19 +411,34 @@ export default function MonitoringDayDetail() {
     [setSearchParams],
   );
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError("");
-    getMonitoringDay({ user_id: userId, date })
-      .then((res) => setData(res.data))
-      .catch((err) =>
-        setError(err.response?.data?.message || "Unable to load the day detail."),
-      )
-      .finally(() => setLoading(false));
-  }, [userId, date]);
+  const load = useCallback(
+    ({ silent = false } = {}) => {
+      if (!silent) setLoading(true);
+      setError("");
+      return getMonitoringDay({ user_id: userId, date })
+        .then((res) => setData(res.data))
+        .catch((err) => {
+          // A background refresh that fails leaves the last good view in place.
+          if (!silent)
+            setError(err.response?.data?.message || "Unable to load the day detail.");
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [userId, date],
+  );
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Silent auto-refresh while the tab is visible.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") load({ silent: true });
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(timer);
   }, [load]);
 
   const summary = data?.summary || null;

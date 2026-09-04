@@ -49,7 +49,9 @@ const DEFAULT_INPUT_POLL_INTERVAL_SECONDS = 25;
 // reports content_capture.active === true (legal gate open + org enabled +
 // consent on file). These only tune cadence when it IS active.
 const DEFAULT_CONTENT_POLL_INTERVAL_SECONDS = 4;
-const DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS = 30;
+// Lowered 30 -> 15 so a captured search/prompt reaches the server within ~15s of
+// being emitted. At ~7 agents this is ~1 small POST per agent per 15s — trivial.
+const DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS = 15;
 
 function positiveNumberOr(value, fallback) {
     const n = Number(value);
