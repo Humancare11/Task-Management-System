@@ -9,6 +9,7 @@ import {
   AppWindow,
   Globe,
   Moon,
+  Monitor,
   MonitorOff,
   Clock,
   AlertTriangle,
@@ -31,11 +32,12 @@ import {
   formatIsoDateLong,
   isoDate,
   shiftIsoDate,
-  summaryStatus,
   SCREEN_OFF_REASON_LABEL,
   buildAppWebGroups,
   buildActivityLog,
   collapseWithRecent,
+  deviceLiveStatus,
+  overallLiveStatus,
 } from "./monitoringUtils.js";
 
 function StatTile({ icon: Icon, label, value, hint, tone }) {
@@ -53,6 +55,26 @@ function StatTile({ icon: Icon, label, value, hint, tone }) {
         {value}
       </p>
       {hint && <p className="mt-0.5 text-[11px] leading-snug text-txt-muted">{hint}</p>}
+    </div>
+  );
+}
+
+// Placeholder tile for a future live-screen preview. UI only — no streaming,
+// no screenshots, no data fetch. `status` is the device's current live state
+// so the box reads sensibly (e.g. "Locked" / "Offline") once the real preview
+// exists.
+function LiveScreenTile({ status }) {
+  return (
+    <div className="flex flex-col rounded-xl border border-dashed border-hair bg-surface-1 p-4">
+      <div className="flex items-center gap-2 text-txt-muted">
+        <Monitor size={15} />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em]">Live Screen</span>
+      </div>
+      <div className="mt-1.5 flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-hair bg-surface-2/60 px-2 py-3 text-center">
+        <span className="text-[11px] text-txt-muted">
+          {status?.live ? `${status.label} · preview coming soon` : "Preview coming soon"}
+        </span>
+      </div>
     </div>
   );
 }
@@ -76,7 +98,12 @@ function Bar({ label, seconds, total, sub, indent, icon: Icon }) {
   );
 }
 
+const PERIOD_LIMIT = 6;
+
 function PeriodList({ title, icon: Icon, rows, emptyText }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? rows : rows.slice(0, PERIOD_LIMIT);
+
   return (
     <div>
       <h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-txt-muted">
@@ -85,24 +112,37 @@ function PeriodList({ title, icon: Icon, rows, emptyText }) {
       {rows.length === 0 ? (
         <p className="text-xs text-txt-muted">{emptyText}</p>
       ) : (
-        <ul className="space-y-1.5">
-          {rows.map((r, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between rounded-lg border border-hair bg-surface-2/50 px-3 py-2 text-xs"
+        <>
+          <ul className="space-y-1.5">
+            {shown.map((r, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between rounded-lg border border-hair bg-surface-2/50 px-3 py-2 text-xs"
+              >
+                <span className="text-txt-primary">
+                  {formatClock(r.started_at)} – {formatClock(r.ended_at)}
+                  {r.screen_off_reason && (
+                    <span className="ml-2 text-txt-muted">
+                      {SCREEN_OFF_REASON_LABEL[r.screen_off_reason] || r.screen_off_reason}
+                    </span>
+                  )}
+                </span>
+                <span className="font-semibold text-txt-primary">
+                  {formatHm(r.duration_seconds)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {rows.length > PERIOD_LIMIT && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-2 text-[11px] font-semibold text-accentblue hover:underline"
             >
-              <span className="text-txt-primary">
-                {formatClock(r.started_at)} – {formatClock(r.ended_at)}
-                {r.screen_off_reason && (
-                  <span className="ml-2 text-txt-muted">
-                    {SCREEN_OFF_REASON_LABEL[r.screen_off_reason] || r.screen_off_reason}
-                  </span>
-                )}
-              </span>
-              <span className="font-semibold text-txt-primary">{formatHm(r.duration_seconds)}</span>
-            </li>
-          ))}
-        </ul>
+              {expanded ? "See less" : `See More (${rows.length - PERIOD_LIMIT} more)`}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
@@ -261,6 +301,7 @@ function ActivityLogPanel({ rows }) {
 function DeviceSection({ device, overlapNote }) {
   const pc = device.pc_session;
   const intervals = device.intervals || [];
+  const live = deviceLiveStatus(device);
   const [showAllApps, setShowAllApps] = useState(false);
 
   // Unified Applications & Websites + chronological logs — both derived purely
@@ -285,13 +326,14 @@ function DeviceSection({ device, overlapNote }) {
           <span className="text-sm font-semibold text-txt-primary">
             {device.agent?.device_name || "Device"}
           </span>
-          {pc.is_provisional && <Badge tone="info">Live</Badge>}
-          {pc.unclean_shutdown && (
-            <Badge tone="warning">
-              <AlertTriangle size={11} className="mr-1" />
-              Unclean shutdown
-            </Badge>
+          {live.live && (
+            <span className="relative flex h-2 w-2" title="live">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
           )}
+          <Badge tone={live.tone}>{live.label}</Badge>
+          {live.hint && <span className="text-[11px] text-txt-muted">{live.hint}</span>}
         </div>
         <span className="text-xs text-txt-muted">
           {formatClock(pc.first_pc_on)} → {formatClock(pc.final_pc_off)}
@@ -333,6 +375,7 @@ function DeviceSection({ device, overlapNote }) {
             tone="muted"
           />
         )}
+        <LiveScreenTile status={live} />
       </div>
 
       {overlapNote && (
@@ -557,8 +600,8 @@ export default function MonitoringDayDetail() {
   }, [load]);
 
   const summary = data?.summary || null;
-  const status = summaryStatus(summary);
   const devices = data?.devices || [];
+  const status = overallLiveStatus(devices);
   const name = employeeName(data?.user);
 
   const overlapNote =
@@ -635,13 +678,18 @@ export default function MonitoringDayDetail() {
                 <p className="text-xs text-txt-muted">{data.user?.email}</p>
               </div>
               <Badge tone={status.tone}>{status.label}</Badge>
+              {status.hint && (
+                <span className="text-[11px] text-txt-muted">{status.hint}</span>
+              )}
               {summary?.multi_device && (
                 <Badge tone="info">{summary.device_count} devices</Badge>
               )}
             </div>
 
-            {/* merged summary band (only meaningful with >1 device; still shown for context) */}
-            {summary && (
+            {/* Merged cross-device band — shown ONLY for multi-device days, where
+                the union numbers differ from any single device. For a single
+                device it would just duplicate that device's stat band. */}
+            {summary && devices.length > 1 && (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 <StatTile
                   icon={Power}

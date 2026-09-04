@@ -94,12 +94,88 @@ export function formatIsoDateLong(iso) {
 }
 
 // Presence for a day summary row. Provisional (agent still beating today) reads
-// as Active; otherwise it is a completed day.
+// as Active; otherwise it is a completed day. Used by the employee-list cards,
+// which only have the merged summary (no per-interval detail).
 export function summaryStatus(summary) {
   if (!summary) return { label: "No data", tone: "neutral" };
   if (summary.is_provisional) return { label: "Active", tone: "success" };
   if (summary.unclean_shutdown) return { label: "Ended (unclean)", tone: "warning" };
   return { label: "Ended", tone: "neutral" };
+}
+
+// ---------------------------------------------------------------------------
+// "Live Active" status — the precise, real-time state of one device.
+//
+// Definition: for a PROVISIONAL pc_session (today, last agent event within
+// PROVISIONAL_FRESH_MS / ~3 min — i.e. the agent is still reporting) the state
+// is read from the LAST classified interval, which ends at that last event and
+// so reflects what is happening right now:
+//
+//   provisional, last interval …
+//     active                          -> "Active"        (green)  at the keyboard / mouse
+//     idle                            -> "Idle"          (amber)  no input > 5 min, screen still on
+//     screen_off + reason "locked"    -> "Locked"        (slate)  workstation locked, PC running
+//     screen_off + reason "display_off" -> "Screen off"  (slate)  monitor/display off, PC running
+//     screen_off + reason "sleep"     -> "Sleeping"      (slate)  system sleep/standby
+//     screen_off + reason "reboot"    -> "Restarting"    (slate)
+//     untracked                       -> "Not reporting" (amber)  agent process gone but session fresh
+//
+//   NOT provisional …
+//     clean agent stop / session end  -> "Offline"       (slate)  PC shut down / signed out cleanly
+//     stale or unclean shutdown       -> "Offline"       (amber)  power-cut / crash / lost connection
+//     no pc_session                   -> "No data"
+//
+// Nothing new is tracked here — it is a read of the existing derived
+// pc_session + monitoring_intervals rows. Pair with the ~30s auto-refresh so
+// the badge follows the data.
+export function deviceLiveStatus(device) {
+  const pc = device?.pc_session;
+  if (!pc) return { label: "No data", tone: "neutral", live: false };
+
+  if (!pc.is_provisional) {
+    return pc.unclean_shutdown
+      ? { label: "Offline", tone: "warning", live: false, hint: "connection lost / unclean" }
+      : { label: "Offline", tone: "neutral", live: false, hint: "PC powered off" };
+  }
+
+  const ivs = device.intervals || [];
+  const last = ivs[ivs.length - 1];
+  if (!last) return { label: "Live", tone: "success", live: true };
+
+  if (last.type === "active") return { label: "Active", tone: "success", live: true };
+  if (last.type === "idle") return { label: "Idle", tone: "warning", live: true };
+  if (last.type === "untracked")
+    return { label: "Not reporting", tone: "warning", live: true, hint: "agent not sending events" };
+  if (last.type === "screen_off") {
+    const r = last.screen_off_reason;
+    if (r === "locked") return { label: "Locked", tone: "neutral", live: true };
+    if (r === "sleep") return { label: "Sleeping", tone: "neutral", live: true };
+    if (r === "reboot") return { label: "Restarting", tone: "neutral", live: true };
+    return { label: "Screen off", tone: "neutral", live: true }; // display_off / default
+  }
+  return { label: "Live", tone: "success", live: true };
+}
+
+// Roll per-device states up to one badge for the whole day view: the most
+// "present" device wins.
+const LIVE_STATUS_ORDER = [
+  "Active",
+  "Idle",
+  "Not reporting",
+  "Locked",
+  "Sleeping",
+  "Restarting",
+  "Screen off",
+  "Live",
+  "Offline",
+  "No data",
+];
+export function overallLiveStatus(devices) {
+  const list = (devices || []).map(deviceLiveStatus);
+  if (list.length === 0) return { label: "No data", tone: "neutral", live: false };
+  return [...list].sort(
+    (a, b) => LIVE_STATUS_ORDER.indexOf(a.label) - LIVE_STATUS_ORDER.indexOf(b.label),
+  )[0];
 }
 
 // Colour + label for a timeline / interval segment type.
