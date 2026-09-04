@@ -39,6 +39,6 @@ test("contentCaptureGate re-exports the SAME version (no drift)", () => {
   );
 });
 
-test("the legal gate is still closed", () => {
-  assert.equal(gate.CONTENT_CAPTURE_LEGALLY_APPROVED, false);
+test("the legal gate is open (approved 2026-09-04 after legal review)", () => {
+  assert.equal(gate.CONTENT_CAPTURE_LEGALLY_APPROVED, true);
 });

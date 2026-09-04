@@ -315,7 +315,7 @@ test("gate closed -> readContent 403 regardless of role", async () => {
     from: "2026-09-01",
     to: "2026-09-03",
     models: {},
-    deps: {}, // real gate = false
+    deps: { gateApproved: false },
   });
   assert.equal(res.status, 403);
 });

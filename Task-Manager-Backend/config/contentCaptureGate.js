@@ -23,7 +23,9 @@
  * override. Flipping it is a reviewed code change.
  */
 
-const CONTENT_CAPTURE_LEGALLY_APPROVED = false;
+// Opened 2026-09-04 after legal review of the consent flow + feature, with the
+// consent document finalized and consent rows collected for captured employees.
+const CONTENT_CAPTURE_LEGALLY_APPROVED = true;
 
 // The consent document version employees must have accepted before any of their
 // content is captured or stored. Defined with the notice text in
