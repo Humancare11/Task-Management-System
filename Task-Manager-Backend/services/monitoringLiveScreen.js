@@ -23,20 +23,34 @@ const MAX_SESSION_MS = num(process.env.LIVE_SCREEN_MAX_SESSION_MS, 30 * 60 * 100
 const REQUEST_TIMEOUT_MS = num(process.env.LIVE_SCREEN_REQUEST_TIMEOUT_MS, 45 * 1000);
 const ENDED_GRACE_MS = 15 * 1000; // keep an ended session briefly so a late poll sees "stop"
 
-/** ICE/TURN servers for both peers. Configure LIVE_SCREEN_ICE_SERVERS as a JSON
- * array of RTCIceServer objects for production NAT traversal (a TURN server is
- * required when peers are on restrictive networks). */
+/** ICE/TURN servers for both peers.
+ *
+ * PRODUCTION: set LIVE_SCREEN_ICE_SERVERS to a JSON array of RTCIceServer
+ * objects that includes a TURN server — direct P2P fails whenever either peer
+ * is behind a symmetric NAT / restrictive firewall (common on corporate and
+ * mobile networks), and only TURN relays past that. Example:
+ *   LIVE_SCREEN_ICE_SERVERS=[
+ *     {"urls":"stun:stun.l.google.com:19302"},
+ *     {"urls":["turn:turn.example.com:3478","turn:turn.example.com:3478?transport=tcp"],
+ *      "username":"…","credential":"…"}
+ *   ]
+ * The default below is STUN-only and will not connect through a strict NAT. */
+const DEFAULT_ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+];
+
 function iceServers() {
   const raw = process.env.LIVE_SCREEN_ICE_SERVERS;
   if (raw && raw.trim()) {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length) return parsed;
     } catch {
-      /* fall through to default */
+      console.error("LIVE_SCREEN_ICE_SERVERS is not valid JSON — using STUN-only default.");
     }
   }
-  return [{ urls: "stun:stun.l.google.com:19302" }];
+  return DEFAULT_ICE_SERVERS;
 }
 
 // sessionId -> session

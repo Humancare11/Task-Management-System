@@ -8,6 +8,7 @@ const assert = require("node:assert/strict");
 
 const ls = require("../services/monitoringLiveScreen");
 const gate = require("../config/liveScreenGate");
+const consentDoc = require("../config/liveScreenConsentDocument");
 
 test.afterEach(() => ls._reset());
 
@@ -23,11 +24,31 @@ const liveGrant = {
 
 // --- legal gate ---------------------------------------------------------
 
-test("the legal gate ships CLOSED", () => {
-  assert.equal(gate.LIVE_SCREEN_LEGALLY_APPROVED, false);
+test("the legal gate is open (design approved 2026-09-04)", () => {
+  assert.equal(gate.LIVE_SCREEN_LEGALLY_APPROVED, true);
 });
 
-test("gate closed -> not_enabled regardless of role / org / grant", () => {
+test("consent doc: one-time setup notice covering the mandatory safeguards", () => {
+  assert.equal(consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION, "2026-09-04.ls-v2");
+  assert.equal(
+    gate.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+    consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+  );
+  const t = consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_TEXT.toLowerCase();
+  for (const phrase of [
+    "once", // taken once at setup
+    "banner", // mandatory on-screen indicator
+    "stop", // employee stop control
+    "not recorded", // no recording
+    "peer-to-peer",
+    "decline",
+    "withdraw",
+  ]) {
+    assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
+  }
+});
+
+test("gate closed (test seam) -> not_enabled regardless of role / org / grant", () => {
   const r = ls.authorizeViewer({
     gateApproved: false,
     orgSettings: { live_screen_enabled: true },

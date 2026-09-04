@@ -1,39 +1,29 @@
 "use strict";
 
 /**
- * HARD LEGAL GATE for the Live Screen feature (real-time view of an employee's
- * screen).
+ * LEGAL GATE for the Live Screen feature (real-time view of an employee's
+ * screen). Compile-time constant on purpose — there is deliberately NO env var
+ * override. Flipping it is a reviewed code change.
  *
- * ────────────────────────────────────────────────────────────────────────────
- *  DO NOT set LIVE_SCREEN_LEGALLY_APPROVED to true until:
- *    1. The live-screen consent document (LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
- *       config/liveScreenConsentDocument.js) is finalized and legally reviewed.
- *       This is a SEPARATE consent from §5b content capture — the §5b notice
- *       explicitly tells employees their screen contents are NOT recorded.
- *    2. Consent rows exist for the employees who may be viewed.
- *    3. This feature has passed an actual legal review, including the mandatory
- *       on-screen "your screen is being viewed" indicator and the no-recording
- *       guarantee.
- * ────────────────────────────────────────────────────────────────────────────
- *
- * While this is false, the entire live-screen path is disabled end to end:
- *   - the agent never captures the screen,
- *   - the signaling endpoints return 501,
- *   - the socket events reject with "not enabled",
- *   - the dashboard tile stays a placeholder.
- * regardless of any per-org setting, consent row, grant, or role.
- *
- * Compile-time constant on purpose — there is deliberately NO env var override.
- * Flipping it is a reviewed code change.
+ * Opened 2026-09-04: legal approval confirmed for this design specifically —
+ * real-time WebRTC screen viewing with the mandatory on-screen "your screen is
+ * being viewed" banner + employee Stop button retained, a one-time consent
+ * taken at agent setup (LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+ * config/liveScreenConsentDocument.js), admin-only start/stop, no recording,
+ * and per-session audit logging.
  *
  * Live Screen NEVER records or stores anything: the media is peer-to-peer
  * WebRTC (agent -> viewer), the backend relays only SDP/ICE text which is held
  * in memory and discarded on teardown, and nothing is written to the database,
  * disk, or object storage. Only session METADATA (who viewed whom, when, for
  * how long, why it ended) is persisted, in monitoring_live_screen_sessions.
+ *
+ * Runtime still requires: the per-org live_screen_enabled setting, a recorded
+ * consent row for the employee, and a viewer who is the org owner or holds an
+ * active monitoring_content_grant.
  */
 
-const LIVE_SCREEN_LEGALLY_APPROVED = false;
+const LIVE_SCREEN_LEGALLY_APPROVED = true;
 
 const {
   LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,

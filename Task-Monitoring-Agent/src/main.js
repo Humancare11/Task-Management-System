@@ -277,16 +277,17 @@ function applyContentSignal(config, signal) {
     contentCaptureRunner.stop();
 
     if (decision.prompt) {
-        lastConsentPromptedVersion = decision.prompt.version;
-        lastConsentDocument = { ...decision.prompt };
         promptForConsent(decision.prompt);
     }
 }
 
+// Shows the ONE consent screen for a given document. Both the §5b notice and
+// the Live Screen notice go through here; the setup UI restores the pending
+// document via content:getConsentState if the window is closed before deciding.
 function promptForConsent(doc) {
-    logger.info(
-        `Content-capture consent notice required (document ${doc.version}). Showing consent screen.`
-    );
+    lastConsentPromptedVersion = doc.version;
+    lastConsentDocument = { version: doc.version, title: doc.title, text: doc.text };
+    logger.info(`Consent notice required (document ${doc.version}). Showing consent screen.`);
     showWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("content:consentRequired", {
@@ -297,11 +298,14 @@ function promptForConsent(doc) {
     }
 }
 
-// Live Screen: drive the fast-poll loop and (separately) prompt for the
-// live-screen consent notice, which is its OWN document — the §5b notice tells
-// the employee their screen is not recorded, so live viewing needs explicit,
-// separate consent. Reuses the same consent screen + POST /agent/consent.
-let lastLiveConsentPromptedVersion = null;
+// Live Screen consent is taken ONCE, as part of Monitoring Agent setup — there
+// is no per-session prompt. The server carries the notice in the heartbeat's
+// live_screen block while it is still needed; we show it exactly once (during
+// setup for a new install, or on first launch for an agent installed before
+// the feature existed) through the same consent screen as §5b. After the
+// employee accepts, every future session reuses that recorded consent.
+let liveConsentDoc = null;
+let liveConsentShown = false;
 
 function applyLiveScreenSignal(config, signal) {
     if (!signal || typeof signal !== "object") {
@@ -310,27 +314,31 @@ function applyLiveScreenSignal(config, signal) {
     }
 
     const version = signal.document_version || null;
-    const needConsent =
+    if (
         signal.consent_required === true &&
         signal.consented !== true &&
         Boolean(version) &&
         typeof signal.document_text === "string" &&
-        signal.document_text.trim().length > 0;
-
-    if (
-        needConsent &&
-        lastLiveConsentPromptedVersion !== version &&
-        !consentStore.hasConsentFor(version)
+        signal.document_text.trim().length > 0
     ) {
-        lastLiveConsentPromptedVersion = version;
-        promptForConsent({
+        liveConsentDoc = {
             version,
-            title: signal.document_title || "Live Screen — Consent Required",
+            title: signal.document_title || "Notice & Consent — Live View of Your Screen",
             text: signal.document_text,
-        });
+        };
+    } else if (signal.consented === true) {
+        liveConsentDoc = null;
     }
 
+    presentLiveScreenSetupConsentOnce();
     liveScreenController.applyLiveScreenSignal(config, signal);
+}
+
+function presentLiveScreenSetupConsentOnce() {
+    if (liveConsentShown || !liveConsentDoc) return;
+    if (consentStore.hasConsentFor(liveConsentDoc.version)) return;
+    liveConsentShown = true;
+    promptForConsent(liveConsentDoc);
 }
 
 // Electron powerMonitor lives in the main process only (no headless equivalent).

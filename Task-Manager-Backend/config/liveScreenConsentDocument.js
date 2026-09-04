@@ -2,41 +2,45 @@
 
 /**
  * Live Screen consent document — the SINGLE SOURCE OF TRUTH for the notice
- * shown to employees before their screen can be viewed live.
+ * shown to employees.
  *
- * SEPARATE from the §5b content-capture consent: that notice tells employees
- * their screen contents are NOT recorded, so live viewing needs its own,
- * explicit acknowledgment.
- *
- * The agent fetches this text via the heartbeat and shows it on the consent
- * screen; on "I Accept" the agent posts LIVE_SCREEN_CONSENT_DOCUMENT_VERSION
- * back and the server writes a monitoring_consents row against it. A live-screen
- * session may only start when a matching consent row exists for the employee.
+ * ── When it is shown ────────────────────────────────────────────────────────
+ * ONCE, during Monitoring Agent setup (and, for an agent installed before this
+ * feature existed, once on its first launch afterwards). There is NO per-session
+ * prompt: once the employee accepts, every future Live Screen session reuses
+ * that recorded consent (a monitoring_consents row for this version). The agent
+ * never pops this notice again unless the version below changes.
  *
  * Changing the wording in any material way -> BUMP the version (sortable
- * string). Every employee is then re-prompted before the next session.
+ * string). Every employee is then re-prompted once, at setup / next launch.
  *
- * NOTE: recording consent here does not enable anything. Live screen also
- * requires LIVE_SCREEN_LEGALLY_APPROVED (config/liveScreenGate.js) and the
- * per-org live_screen_enabled setting.
+ * NOTE: recording consent does not enable anything on its own. Live Screen also
+ * requires the per-org live_screen_enabled setting and a viewer who is the org
+ * owner or holds an active monitoring_content_grant. Every session is audited
+ * (monitoring_live_screen_sessions) and shows the employee an on-screen banner
+ * with a Stop button for its whole duration.
  */
 
-const LIVE_SCREEN_CONSENT_DOCUMENT_VERSION = "2026-09-04.ls-v1";
+const LIVE_SCREEN_CONSENT_DOCUMENT_VERSION = "2026-09-04.ls-v2";
 
 const LIVE_SCREEN_CONSENT_DOCUMENT_TITLE =
   "Notice & Consent — Live View of Your Screen";
 
-const LIVE_SCREEN_CONSENT_DOCUMENT_TEXT = `Your employer is asking for your consent to VIEW YOUR SCREEN LIVE, in real
-time, from the management dashboard.
+const LIVE_SCREEN_CONSENT_DOCUMENT_TEXT = `This is part of setting up the Monitoring Agent on this computer. You are being
+asked ONCE for your consent; after you accept, you will not be asked again.
 
-WHAT THIS MEANS
-  • When an authorized person (the organization owner, or someone they have
-    specifically and temporarily authorized) starts a Live Screen session, they
-    see whatever is currently on your screen, as it happens.
-  • You will ALWAYS see an on-screen banner — "Your screen is being viewed by
-    <name>" — for the entire time a session is active. If that banner is not
-    shown, no one is viewing your screen.
-  • The banner has a "Stop" button. You can end the session yourself at any
+WHAT YOU ARE CONSENTING TO
+  • In addition to the activity monitoring already described, an authorized
+    person — the organization owner, or someone they have specifically and
+    temporarily authorized — may VIEW YOUR SCREEN LIVE, in real time, from the
+    management dashboard.
+  • Sessions are started and stopped by that authorized person.
+
+YOU ARE ALWAYS TOLD WHEN IT IS HAPPENING
+  • Whenever a session is active you will see an on-screen banner — "Your screen
+    is being viewed live by <name>" — for the entire time. If that banner is not
+    on your screen, no one is viewing it.
+  • The banner has a "Stop" button. You can end any session yourself, at any
     time, for any reason, with one click.
 
 WHAT IS AND IS NOT KEPT
@@ -47,14 +51,15 @@ WHAT IS AND IS NOT KEPT
   • The only thing stored is a log entry: who viewed, when, and for how long.
 
 YOUR CHOICE
-  • "I Accept" allows authorized live-screen sessions for your account.
+  • "I Accept" allows authorized, on-screen-indicated live viewing of your
+    screen for your account.
   • "I Decline", or closing this window, means your screen cannot be viewed
-    live. Your other monitoring is unaffected, and declining has no other
-    effect here.
+    live. Your other monitoring is unaffected, and declining has no other effect
+    on setup.
   • You can withdraw this consent at any time by contacting your manager or HR.
 
-By choosing "I Accept" you confirm that you have read this notice and consent
-to authorized, indicated, non-recorded live viewing of your screen as
+By choosing "I Accept" you confirm that you have read this notice and consent to
+authorized, banner-indicated, non-recorded live viewing of your screen as
 described above.`;
 
 module.exports = {

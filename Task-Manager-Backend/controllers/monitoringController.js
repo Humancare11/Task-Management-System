@@ -1251,12 +1251,19 @@ exports.submitAgentConsent = async (req, res) => {
         ? req.body.document_version.trim()
         : CONTENT_CONSENT_DOCUMENT_VERSION;
 
-    if (documentVersion !== CONTENT_CONSENT_DOCUMENT_VERSION) {
+    // The agent records either the §5b content-capture consent or the Live
+    // Screen setup consent through this one endpoint. Anything else is stale.
+    const ACCEPTED_VERSIONS = [
+      CONTENT_CONSENT_DOCUMENT_VERSION,
+      LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+    ];
+    if (!ACCEPTED_VERSIONS.includes(documentVersion)) {
       return res.status(409).json({
         message: "Consent document version mismatch.",
         expected_document_version: CONTENT_CONSENT_DOCUMENT_VERSION,
       });
     }
+    const isLiveScreen = documentVersion === LIVE_SCREEN_CONSENT_DOCUMENT_VERSION;
 
     const method =
       typeof req.body.method === "string" && req.body.method.trim()
@@ -1280,11 +1287,15 @@ exports.submitAgentConsent = async (req, res) => {
       },
     });
 
-    // Reflect on the agent row (used by the agent-list liveness view).
-    await MonitoringAgent.update(
-      { content_consent_at: consent.accepted_at },
-      { where: { id: agent.id } }
-    ).catch(() => {});
+    // Reflect the §5b consent on the agent row (used by the agent-list liveness
+    // view). The Live Screen consent is tracked only by its monitoring_consents
+    // row.
+    if (!isLiveScreen) {
+      await MonitoringAgent.update(
+        { content_consent_at: consent.accepted_at },
+        { where: { id: agent.id } }
+      ).catch(() => {});
+    }
 
     return res.status(created ? 201 : 200).json({
       message: created ? "Consent recorded." : "Consent already on file.",
