@@ -58,6 +58,6 @@ test("contentCaptureGate re-exports the SAME version (no drift)", () => {
   );
 });
 
-test("the legal gate is closed pending re-review of the widened scope", () => {
-  assert.equal(gate.CONTENT_CAPTURE_LEGALLY_APPROVED, false);
+test("the legal gate is open for the widened (all-site) scope + v2 notice", () => {
+  assert.equal(gate.CONTENT_CAPTURE_LEGALLY_APPROVED, true);
 });

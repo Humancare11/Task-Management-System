@@ -23,13 +23,13 @@
  * override. Flipping it is a reviewed code change.
  */
 
-// Returned to closed 2026-09-04: the capture scope was widened from the fixed
-// five-site list to all-site search-field capture (consent document bumped to
-// 2026-09-04.v2). The earlier approval covered only the narrow scope, so this
-// gate stays false until the widened scope + v2 notice pass a fresh legal
-// review. Flipping it is a reviewed code change — there is deliberately no env
-// override.
-const CONTENT_CAPTURE_LEGALLY_APPROVED = false;
+// Opened 2026-09-04 for the WIDENED scope: all-site search-field capture plus
+// AI-assistant prompts, with the 2026-09-04.v2 consent notice. Both the widened
+// scope and the exact v2 notice text passed a completed legal review. Capture
+// additionally requires the encryption key registry, the per-org setting, and a
+// per-employee consent row against 2026-09-04.v2. Flipping this is a reviewed
+// code change — there is deliberately no env override.
+const CONTENT_CAPTURE_LEGALLY_APPROVED = true;
 
 // The consent document version employees must have accepted before any of their
 // content is captured or stored. Defined with the notice text in
