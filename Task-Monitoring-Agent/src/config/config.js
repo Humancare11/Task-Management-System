@@ -53,6 +53,12 @@ const DEFAULT_CONTENT_POLL_INTERVAL_SECONDS = 4;
 // being emitted. At ~7 agents this is ~1 small POST per agent per 15s — trivial.
 const DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS = 15;
 
+// Live Screen (opt-in, gated). The agent only polls this fast while the
+// heartbeat reports a session pending; otherwise it is silent. A session is
+// hard-capped at liveScreenMaxSessionSeconds regardless of the viewer.
+const DEFAULT_LIVE_SCREEN_POLL_INTERVAL_SECONDS = 2;
+const DEFAULT_LIVE_SCREEN_MAX_SESSION_SECONDS = 30 * 60;
+
 function positiveNumberOr(value, fallback) {
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -176,6 +182,16 @@ function buildConfig(fallback = {}) {
         contentFlushIntervalSeconds: positiveNumberOr(
             layered("CONTENT_FLUSH_INTERVAL_SECONDS", "contentFlushIntervalSeconds"),
             DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS,
+        ),
+
+        // --- Live Screen (gated; activation is driven by the heartbeat) ---
+        liveScreenPollIntervalSeconds: positiveNumberOr(
+            layered("LIVE_SCREEN_POLL_INTERVAL_SECONDS", "liveScreenPollIntervalSeconds"),
+            DEFAULT_LIVE_SCREEN_POLL_INTERVAL_SECONDS,
+        ),
+        liveScreenMaxSessionSeconds: positiveNumberOr(
+            layered("LIVE_SCREEN_MAX_SESSION_SECONDS", "liveScreenMaxSessionSeconds"),
+            DEFAULT_LIVE_SCREEN_MAX_SESSION_SECONDS,
         ),
     };
 }

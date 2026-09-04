@@ -24,6 +24,7 @@ import EmptyState from "../../components/common/EmptyState.jsx";
 import ErrorState from "../../components/common/ErrorState.jsx";
 import Spinner from "../../components/common/Spinner.jsx";
 import MonitoringTimeline from "./MonitoringTimeline.jsx";
+import LiveScreenViewer from "./LiveScreenViewer.jsx";
 import { getMonitoringDay, getMonitoringContent } from "../../api/monitoring.js";
 import {
   employeeName,
@@ -59,22 +60,31 @@ function StatTile({ icon: Icon, label, value, hint, tone }) {
   );
 }
 
-// Placeholder tile for a future live-screen preview. UI only — no streaming,
-// no screenshots, no data fetch. `status` is the device's current live state
-// so the box reads sensibly (e.g. "Locked" / "Offline") once the real preview
-// exists.
-function LiveScreenTile({ status }) {
+// Live Screen tile. Click to open a real-time, peer-to-peer view of the
+// employee's screen (nothing is recorded; the employee sees an on-screen
+// banner). Only actionable while the device is live; the viewer surfaces
+// "not enabled" / "consent missing" if the feature gate or the employee's
+// consent is not in place.
+function LiveScreenTile({ status, onOpen }) {
+  const canView = Boolean(status?.live);
   return (
-    <div className="flex flex-col rounded-xl border border-dashed border-hair bg-surface-1 p-4">
+    <div className="flex flex-col rounded-xl border border-hair bg-surface-1 p-4">
       <div className="flex items-center gap-2 text-txt-muted">
         <Monitor size={15} />
         <span className="text-[11px] font-semibold uppercase tracking-[0.06em]">Live Screen</span>
       </div>
-      <div className="mt-1.5 flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-hair bg-surface-2/60 px-2 py-3 text-center">
-        <span className="text-[11px] text-txt-muted">
-          {status?.live ? `${status.label} · preview coming soon` : "Preview coming soon"}
-        </span>
-      </div>
+      <button
+        type="button"
+        disabled={!canView}
+        onClick={onOpen}
+        className={`mt-1.5 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-3 text-center text-[11px] transition-colors ${
+          canView
+            ? "border-accentblue/40 bg-accentblue/10 font-semibold text-accentblue hover:bg-accentblue/20"
+            : "border-hair bg-surface-2/60 text-txt-muted"
+        }`}
+      >
+        {canView ? "View live screen" : `Unavailable · ${status?.label || "Offline"}`}
+      </button>
     </div>
   );
 }
@@ -298,11 +308,12 @@ function ActivityLogPanel({ rows }) {
   );
 }
 
-function DeviceSection({ device, overlapNote }) {
+function DeviceSection({ device, overlapNote, userId, employeeName }) {
   const pc = device.pc_session;
   const intervals = device.intervals || [];
   const live = deviceLiveStatus(device);
   const [showAllApps, setShowAllApps] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   // Unified Applications & Websites + chronological logs — both derived purely
   // from this device's derived sessions/intervals (no hardcoded list).
@@ -375,8 +386,15 @@ function DeviceSection({ device, overlapNote }) {
             tone="muted"
           />
         )}
-        <LiveScreenTile status={live} />
+        <LiveScreenTile status={live} onOpen={() => setViewerOpen(true)} />
       </div>
+
+      <LiveScreenViewer
+        open={viewerOpen}
+        targetUserId={userId}
+        employeeName={employeeName}
+        onClose={() => setViewerOpen(false)}
+      />
 
       {overlapNote && (
         <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
@@ -743,6 +761,8 @@ export default function MonitoringDayDetail() {
                 key={d.pc_session.id}
                 device={d}
                 overlapNote={devices.length > 1 ? null : overlapNote}
+                userId={userId}
+                employeeName={name}
               />
             ))}
 

@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; media-src blob:;" />
+    <title>Live Screen</title>
+    <style>
+        body { margin: 0; background: #111; color: #9aa; font: 12px system-ui; }
+        #s { padding: 8px; }
+    </style>
+</head>
+<body>
+    <div id="s">Live screen: idle</div>
+    <script>
+        // Non-recording screen sender. The MediaStream lives only here, only
+        // while the session is open; nothing is written anywhere.
+        (function () {
+            const S = document.getElementById("s");
+            const set = (t) => { S.textContent = "Live screen: " + t; };
+
+            let pc = null;
+            let stream = null;
+            let sessionId = null;
+            let started = false;
+
+            function teardown() {
+                try { if (stream) stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+                try { if (pc) pc.close(); } catch (e) {}
+                stream = null;
+                pc = null;
+                set("stopped");
+            }
+
+            window.liveScreen.onStop(teardown);
+
+            window.liveScreen.onAnswer(async ({ sdp }) => {
+                if (!pc || !sdp) return;
+                try {
+                    await pc.setRemoteDescription({ type: "answer", sdp });
+                    set("answer applied");
+                } catch (e) {
+                    window.liveScreen.sendError("setRemoteDescription: " + e.message);
+                    teardown();
+                }
+            });
+
+            window.liveScreen.onRemoteIce(async ({ candidate }) => {
+                if (!pc || !candidate) return;
+                try { await pc.addIceCandidate(candidate); } catch (e) { /* non-fatal */ }
+            });
+
+            window.liveScreen.onInit(async ({ sessionId: sid, iceServers }) => {
+                if (started) return;
+                started = true;
+                sessionId = sid;
+                try {
+                    set("requesting screen");
+                    stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { frameRate: 15 },
+                        audio: false,
+                    });
+                    // stop everything if the OS/user ends the capture
+                    stream.getVideoTracks()[0].addEventListener("ended", () => {
+                        window.liveScreen.sendError("capture ended");
+                        teardown();
+                    });
+
+                    pc = new RTCPeerConnection({ iceServers: iceServers || [] });
+                    for (const track of stream.getTracks()) pc.addTrack(track, stream);
+
+                    pc.addEventListener("icecandidate", (e) => {
+                        if (e.candidate) window.liveScreen.sendIce(e.candidate.toJSON());
+                    });
+                    pc.addEventListener("connectionstatechange", () => {
+                        set("peer " + pc.connectionState);
+                        if (pc.connectionState === "connected") window.liveScreen.sendConnected();
+                        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+                            window.liveScreen.sendError("peer " + pc.connectionState);
+                            teardown();
+                        }
+                    });
+
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    set("offer created");
+                    window.liveScreen.sendOffer(pc.localDescription.sdp);
+                } catch (e) {
+                    window.liveScreen.sendError("capture: " + e.message);
+                    teardown();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

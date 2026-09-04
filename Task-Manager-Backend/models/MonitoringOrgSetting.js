@@ -27,6 +27,11 @@ const MonitoringOrgSetting = sequelize.define(
       allowNull: false,
       defaultValue: 30,
     },
+    live_screen_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   },
   {
     tableName: "monitoring_org_settings",

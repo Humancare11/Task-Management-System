@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';" />
+    <title>Screen viewing</title>
+    <style>
+        html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+        .bar {
+            display: flex; align-items: center; gap: 10px;
+            height: 100%; box-sizing: border-box; padding: 0 12px;
+            border-radius: 10px;
+            background: #b91c1c; color: #fff;
+            font: 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            box-shadow: 0 4px 16px rgba(0,0,0,.35);
+        }
+        .dot {
+            width: 9px; height: 9px; border-radius: 50%; background: #fff;
+            animation: pulse 1.4s infinite ease-in-out; flex: 0 0 auto;
+        }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+        .msg { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        button {
+            flex: 0 0 auto; border: 0; border-radius: 6px; cursor: pointer;
+            background: #fff; color: #b91c1c; font-weight: 700; font-size: 12px;
+            padding: 5px 12px;
+        }
+        button:hover { background: #fee2e2; }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <span class="dot"></span>
+        <span class="msg" id="msg">Your screen is being viewed live.</span>
+        <button id="stop" type="button">Stop</button>
+    </div>
+    <script>
+        (function () {
+            window.liveScreen.onBannerInfo(({ viewerName }) => {
+                document.getElementById("msg").textContent =
+                    "Your screen is being viewed live by " + (viewerName || "an authorized viewer") + ".";
+            });
+            document.getElementById("stop").addEventListener("click", () => {
+                document.getElementById("stop").disabled = true;
+                document.getElementById("msg").textContent = "Stopping…";
+                window.liveScreen.bannerStop();
+            });
+        })();
+    </script>
+</body>
+</html>

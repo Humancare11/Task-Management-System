@@ -40,6 +40,10 @@ async function sendHeartbeat(config) {
                 result.data && result.data.content_capture
                     ? result.data.content_capture
                     : null,
+            // Live Screen signal: { pending, legal_gate_open, consent_required,
+            // consented, document_version, document_title?, document_text? }.
+            liveScreen:
+                result.data && result.data.live_screen ? result.data.live_screen : null,
         };
     }
 

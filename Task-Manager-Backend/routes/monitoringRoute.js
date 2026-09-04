@@ -19,6 +19,8 @@ const {
   submitAgentConsent,
   submitMonitoringContent,
   getMonitoringContent,
+  getAgentLiveScreen,
+  submitAgentLiveScreenSignal,
 } = require("../controllers/monitoringController");
 
 // The raw-event ingest can post batches larger than the global 100kb JSON
@@ -82,6 +84,12 @@ router.post("/agent/consent", submitAgentConsent);
 // Desktop agent submits captured content (no JWT auth). Returns 501 while the
 // legal gate is closed. Route-specific body parser.
 router.post("/agent/content", contentJsonParser, submitMonitoringContent);
+
+// Live Screen — agent signaling (no JWT auth; agent_uuid + agent_secret in
+// body). Relays only SDP/ICE text; 501 while the legal gate is closed so the
+// agent never captures. Media is peer-to-peer and never reaches the server.
+router.post("/agent/livescreen", getAgentLiveScreen);
+router.post("/agent/livescreen/signal", submitAgentLiveScreenSignal);
 
 // DEPRECATED (Phase 5) — read-only historical access to monitoring_activities.
 // The dashboard reads /summary + /daily. Owner/admin only. Responses carry

@@ -32,6 +32,7 @@ const MonitoringConsent = require("./MonitoringConsent");
 const MonitoringContentEvent = require("./MonitoringContentEvent");
 const MonitoringContentGrant = require("./MonitoringContentGrant");
 const MonitoringContentAccessLog = require("./MonitoringContentAccessLog");
+const MonitoringLiveScreenSession = require("./MonitoringLiveScreenSession");
 
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
@@ -748,6 +749,13 @@ MonitoringContentAccessLog.belongsTo(Organization, { foreignKey: "organization_i
 MonitoringContentAccessLog.belongsTo(User, { foreignKey: "viewer_user_id", as: "viewer" });
 MonitoringContentAccessLog.belongsTo(User, { foreignKey: "target_user_id", as: "targetUser" });
 
+// MonitoringLiveScreenSession — audit metadata only (gated by liveScreenGate.js)
+Organization.hasMany(MonitoringLiveScreenSession, { foreignKey: "organization_id", as: "monitoringLiveScreenSessions" });
+MonitoringLiveScreenSession.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+MonitoringLiveScreenSession.belongsTo(User, { foreignKey: "viewer_user_id", as: "viewer" });
+MonitoringLiveScreenSession.belongsTo(User, { foreignKey: "target_user_id", as: "targetUser" });
+MonitoringLiveScreenSession.belongsTo(MonitoringAgent, { foreignKey: "agent_id", as: "agent" });
+
 module.exports = {
   User,
   Organization,
@@ -781,4 +789,5 @@ module.exports = {
   MonitoringContentEvent,
   MonitoringContentGrant,
   MonitoringContentAccessLog,
+  MonitoringLiveScreenSession,
 };

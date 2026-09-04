@@ -34,6 +34,15 @@ const {
 const { isConfigured: contentKeysConfigured } = require("../utils/contentCrypto");
 const { loadActivePatterns } = require("../utils/contentBlocklist");
 const monitoringContent = require("../services/monitoringContent");
+const {
+  LIVE_SCREEN_LEGALLY_APPROVED,
+} = require("../config/liveScreenGate");
+const {
+  LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+  LIVE_SCREEN_CONSENT_DOCUMENT_TITLE,
+  LIVE_SCREEN_CONSENT_DOCUMENT_TEXT,
+} = require("../config/liveScreenConsentDocument");
+const liveScreen = require("../services/monitoringLiveScreen");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -440,6 +449,51 @@ exports.agentHeartbeat = async (req, res) => {
       console.error("Heartbeat content-capture check failed:", ccErr);
     }
 
+    // Live Screen signal.
+    //   - `pending` true when a viewer has an open session waiting for this
+    //     agent — the agent then fast-polls /agent/livescreen and captures.
+    //   - `consent_required` (org enabled) makes the agent show the live-screen
+    //     notice; a session can only run with a matching consent row.
+    let liveScreenBlock = {
+      pending: false,
+      legal_gate_open: LIVE_SCREEN_LEGALLY_APPROVED,
+      consent_required: false,
+      consented: false,
+      document_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+    };
+    try {
+      const lsOrg = await MonitoringOrgSetting.findOne({
+        where: { organization_id: agent.organization_id },
+        raw: true,
+      });
+      const lsEnabled = Boolean(lsOrg && lsOrg.live_screen_enabled);
+      const directive = liveScreen.agentDirective(agent.id);
+      const pending = directive.action === "start" || directive.action === "keep";
+      if (lsEnabled || pending) {
+        const lsConsent = await MonitoringConsent.findOne({
+          where: {
+            user_id: agent.user_id,
+            document_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+          },
+          raw: true,
+        });
+        const consented = Boolean(lsConsent);
+        liveScreenBlock = {
+          pending: pending && LIVE_SCREEN_LEGALLY_APPROVED && consented,
+          legal_gate_open: LIVE_SCREEN_LEGALLY_APPROVED,
+          consent_required: lsEnabled,
+          consented,
+          document_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+        };
+        if (lsEnabled && !consented) {
+          liveScreenBlock.document_title = LIVE_SCREEN_CONSENT_DOCUMENT_TITLE;
+          liveScreenBlock.document_text = LIVE_SCREEN_CONSENT_DOCUMENT_TEXT;
+        }
+      }
+    } catch (lsErr) {
+      console.error("Heartbeat live-screen check failed:", lsErr);
+    }
+
     return res.status(200).json({
       message: "Heartbeat received.",
       agent: {
@@ -449,6 +503,7 @@ exports.agentHeartbeat = async (req, res) => {
         last_seen_at: agent.last_seen_at,
       },
       content_capture: contentCapture,
+      live_screen: liveScreenBlock,
     });
   } catch (error) {
     console.error("Agent heartbeat error:", error);
@@ -1317,5 +1372,69 @@ exports.getMonitoringContent = async (req, res) => {
   } catch (error) {
     console.error("Get monitoring content error:", error);
     return res.status(500).json({ message: "Server error while fetching content." });
+  }
+};
+
+// ===========================================================================
+// Live Screen — agent signaling (no JWT; agent_uuid + agent_secret in body).
+// Media is peer-to-peer WebRTC; these endpoints relay ONLY SDP/ICE text and
+// only while a session is open. 501 whenever the legal gate is closed, so the
+// agent never captures the screen.
+// ===========================================================================
+
+// POST /api/monitoring/agent/livescreen
+// Body: { agent_uuid, agent_secret }. Returns the current directive:
+//   { action: "none" }
+//   { action: "start", session_id, ice_servers, answer?, viewer_ice[] }
+//   { action: "keep",  session_id, viewer_ice[] }
+//   { action: "stop",  session_id }
+exports.getAgentLiveScreen = async (req, res) => {
+  try {
+    if (!LIVE_SCREEN_LEGALLY_APPROVED) {
+      return res.status(501).json({ message: "Live screen is not enabled." });
+    }
+    const auth = await authenticateAgentFromBody(req.body);
+    if (auth.error) {
+      return res.status(auth.error.status).json({ message: auth.error.message });
+    }
+    return res.status(200).json(liveScreen.agentDirective(auth.agent.id));
+  } catch (error) {
+    console.error("getAgentLiveScreen error:", error);
+    return res.status(500).json({ message: "Server error." });
+  }
+};
+
+// POST /api/monitoring/agent/livescreen/signal
+// Body: { agent_uuid, agent_secret, session_id, type, sdp?, candidate? }
+//   type: "offer" | "ice" | "connected" | "stopped" | "error"
+exports.submitAgentLiveScreenSignal = async (req, res) => {
+  try {
+    if (!LIVE_SCREEN_LEGALLY_APPROVED) {
+      return res.status(501).json({ message: "Live screen is not enabled." });
+    }
+    const auth = await authenticateAgentFromBody(req.body);
+    if (auth.error) {
+      return res.status(auth.error.status).json({ message: auth.error.message });
+    }
+    const { session_id, type, sdp, candidate } = req.body || {};
+    const r = liveScreen.agentSignal(auth.agent.id, {
+      session_id,
+      type,
+      sdp,
+      candidate,
+    });
+    if (!r.ok) {
+      return res.status(409).json({ message: r.code || "rejected" });
+    }
+    const d = liveScreen.agentDirective(auth.agent.id);
+    return res.status(200).json({
+      ok: true,
+      action: d.action,
+      answer: d.answer || null,
+      viewer_ice: d.viewer_ice || [],
+    });
+  } catch (error) {
+    console.error("submitAgentLiveScreenSignal error:", error);
+    return res.status(500).json({ message: "Server error." });
   }
 };

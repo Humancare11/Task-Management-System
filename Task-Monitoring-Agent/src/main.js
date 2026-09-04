@@ -53,6 +53,7 @@ const {
 } = require("./monitoring/contentPipeline");
 const contentCaptureRunner = require("./monitoring/contentCaptureRunner");
 const { decideContentAction } = require("./monitoring/contentConsentDecision");
+const liveScreenController = require("./monitoring/liveScreen/liveScreenController");
 const { postConsent } = require("./api/contentClient");
 const {
     loadSecureConfig,
@@ -216,7 +217,10 @@ function startMonitoring(config) {
         else if (kind === "network" || kind === "http") setTrayState("NETWORK_UNAVAILABLE");
         // Only act on a good heartbeat — a transient network failure must not
         // flap capture on/off.
-        if (kind === "ok") applyContentSignal(config, result && result.contentCapture);
+        if (kind === "ok") {
+            applyContentSignal(config, result && result.contentCapture);
+            applyLiveScreenSignal(config, result && result.liveScreen);
+        }
     });
     monitoring = startActivityTracking(config);
     monitoringStarted = true;
@@ -293,6 +297,42 @@ function promptForConsent(doc) {
     }
 }
 
+// Live Screen: drive the fast-poll loop and (separately) prompt for the
+// live-screen consent notice, which is its OWN document — the §5b notice tells
+// the employee their screen is not recorded, so live viewing needs explicit,
+// separate consent. Reuses the same consent screen + POST /agent/consent.
+let lastLiveConsentPromptedVersion = null;
+
+function applyLiveScreenSignal(config, signal) {
+    if (!signal || typeof signal !== "object") {
+        liveScreenController.applyLiveScreenSignal(config, null);
+        return;
+    }
+
+    const version = signal.document_version || null;
+    const needConsent =
+        signal.consent_required === true &&
+        signal.consented !== true &&
+        Boolean(version) &&
+        typeof signal.document_text === "string" &&
+        signal.document_text.trim().length > 0;
+
+    if (
+        needConsent &&
+        lastLiveConsentPromptedVersion !== version &&
+        !consentStore.hasConsentFor(version)
+    ) {
+        lastLiveConsentPromptedVersion = version;
+        promptForConsent({
+            version,
+            title: signal.document_title || "Live Screen — Consent Required",
+            text: signal.document_text,
+        });
+    }
+
+    liveScreenController.applyLiveScreenSignal(config, signal);
+}
+
 // Electron powerMonitor lives in the main process only (no headless equivalent).
 // Lock / unlock / suspend / resume are folded into the screen_state stream by
 // the activity tracker's screen reducer. Listeners are attached once and simply
@@ -339,6 +379,12 @@ function wirePowerMonitor() {
 async function stopMonitoring() {
     stopHeartbeatLoop();
     contentCaptureRunner.stop();
+    // End any live-screen session immediately and stop the poll loop.
+    try {
+        liveScreenController.shutdown();
+    } catch {
+        /* best effort */
+    }
     if (monitoring) {
         try {
             await monitoring.stopActivityTracking();
