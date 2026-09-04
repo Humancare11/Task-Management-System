@@ -52,6 +52,7 @@ const {
     updateContentConfig,
 } = require("./monitoring/contentPipeline");
 const contentCaptureRunner = require("./monitoring/contentCaptureRunner");
+const { decideContentAction } = require("./monitoring/contentConsentDecision");
 const { postConsent } = require("./api/contentClient");
 const {
     loadSecureConfig,
@@ -65,7 +66,7 @@ const { setAutoStart, isAutoStartEnabled, launchedHidden } = require("./autostar
 const logger = require("./utils/logger");
 
 const DEFAULT_API_BASE_URL =
-  "https://localhost:5000/api";
+  "https://darkviolet-cobra-939760.hostingersite.com/api";
 
 let mainWindow = null;
 let tray = null;
@@ -213,7 +214,9 @@ function startMonitoring(config) {
         if (kind === "ok") setTrayState("MONITORING");
         else if (kind === "auth") setTrayState("AUTHENTICATION_FAILED");
         else if (kind === "network" || kind === "http") setTrayState("NETWORK_UNAVAILABLE");
-        applyContentSignal(config, result && result.contentCapture);
+        // Only act on a good heartbeat — a transient network failure must not
+        // flap capture on/off.
+        if (kind === "ok") applyContentSignal(config, result && result.contentCapture);
     });
     monitoring = startActivityTracking(config);
     monitoringStarted = true;
@@ -224,53 +227,62 @@ function startMonitoring(config) {
 }
 
 // The heartbeat's content_capture signal:
-//   { active, legal_gate_open, org_enabled, consent_required, consented, document_version }
-// active === true  <=> legal gate open AND org enabled AND consent row on file.
-// This is the ONLY thing that turns capture on. While the legal flag is false
-// the server always sends active:false, so nothing here ever activates.
+//   { active, legal_gate_open, org_enabled, consent_required, consented,
+//     document_version, document_title?, document_text? }
+//
+// - `active === true` is the ONLY thing that starts capture; the server sets it
+//   only when the legal gate is open AND the org enabled capture AND a consent
+//   row exists.
+// - `consent_required` (org has enabled capture) makes the agent show the
+//   notice, even before the legal gate is flipped, so consent can be gathered
+//   first. Decline / close simply never records consent, so capture never
+//   becomes active.
 let lastConsentPromptedVersion = null;
-function applyContentSignal(config, signal) {
-    if (!signal || !signal.active) {
-        if (setContentActive) setContentActive(false);
-        contentCaptureRunner.stop();
+let lastConsentDocument = null; // { version, title, text } from the last heartbeat that needed it
 
-        // Org wants it, legal gate open, but this employee hasn't consented yet:
-        // show the consent screen once per document version.
-        if (
-            signal &&
-            signal.legal_gate_open &&
-            signal.org_enabled &&
-            signal.consent_required &&
-            !signal.consented &&
-            signal.document_version &&
-            lastConsentPromptedVersion !== signal.document_version &&
-            !consentStore.hasConsentFor(signal.document_version)
-        ) {
-            lastConsentPromptedVersion = signal.document_version;
-            promptForConsent(signal.document_version);
+function applyContentSignal(config, signal) {
+    const decision = decideContentAction(signal, {
+        promptedVersion: lastConsentPromptedVersion,
+        hasLocalConsent: (v) => consentStore.hasConsentFor(v),
+    });
+
+    if (decision.capture === "on") {
+        if (decision.cacheConsent) {
+            // Server confirms consent; mirror it locally so we don't re-prompt.
+            try {
+                consentStore.saveConsent(signal.document_version);
+            } catch {
+                /* local cache is non-critical */
+            }
         }
+        updateContentConfig(config);
+        setContentActive(true);
+        contentCaptureRunner.start(config);
         return;
     }
 
-    // signal.active === true — server has a consent row for this user.
-    if (signal.document_version && !consentStore.hasConsentFor(signal.document_version)) {
-        // Cache locally so we don't re-prompt; server is source of truth.
-        try {
-            consentStore.saveConsent(signal.document_version);
-        } catch {
-            /* non-fatal */
-        }
+    // capture off
+    if (setContentActive) setContentActive(false);
+    contentCaptureRunner.stop();
+
+    if (decision.prompt) {
+        lastConsentPromptedVersion = decision.prompt.version;
+        lastConsentDocument = { ...decision.prompt };
+        promptForConsent(decision.prompt);
     }
-    updateContentConfig(config);
-    setContentActive(true);
-    contentCaptureRunner.start(config);
 }
 
-function promptForConsent(documentVersion) {
-    logger.info(`Content capture consent required (document ${documentVersion}). Showing consent screen.`);
+function promptForConsent(doc) {
+    logger.info(
+        `Content-capture consent notice required (document ${doc.version}). Showing consent screen.`
+    );
     showWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("content:consentRequired", { documentVersion });
+        mainWindow.webContents.send("content:consentRequired", {
+            documentVersion: doc.version,
+            documentTitle: doc.title,
+            documentText: doc.text,
+        });
     }
 }
 
@@ -462,9 +474,13 @@ ipcMain.handle("agent:reconfigure", async () => handleReconfigure());
 
 ipcMain.handle("content:getConsentState", () => {
     const pending = lastConsentPromptedVersion;
+    const isPending = Boolean(pending && !consentStore.hasConsentFor(pending));
     return {
-        pendingDocumentVersion:
-            pending && !consentStore.hasConsentFor(pending) ? pending : null,
+        pendingDocumentVersion: isPending ? pending : null,
+        pendingDocumentTitle:
+            isPending && lastConsentDocument ? lastConsentDocument.title : null,
+        pendingDocumentText:
+            isPending && lastConsentDocument ? lastConsentDocument.text : null,
         accepted: consentStore.loadConsent(),
     };
 });

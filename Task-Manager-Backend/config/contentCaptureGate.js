@@ -25,16 +25,14 @@
 
 const CONTENT_CAPTURE_LEGALLY_APPROVED = false;
 
-/**
- * The consent document version employees must have accepted before any of their
- * content is captured or stored. A capture / ingest is only valid against a
- * monitoring_consents row matching (user_id, this exact string). Bump this
- * string whenever the consent text materially changes — old consents then no
- * longer satisfy the check until re-accepted.
- *
- * PLACEHOLDER until the text is finalized.
- */
-const CONTENT_CONSENT_DOCUMENT_VERSION = "draft-unapproved";
+// The consent document version employees must have accepted before any of their
+// content is captured or stored. Defined with the notice text in
+// config/contentConsentDocument.js (single source of truth); re-exported here so
+// existing importers keep working. A capture / ingest is only valid against a
+// monitoring_consents row matching (user_id, this exact string).
+const {
+  CONTENT_CONSENT_DOCUMENT_VERSION,
+} = require("./contentConsentDocument");
 
 const { isConfigured } = require("../utils/contentCrypto");
 

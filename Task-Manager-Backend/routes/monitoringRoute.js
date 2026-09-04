@@ -14,6 +14,8 @@ const {
   getMonitoringActivities,
   getMonitoringSummary,
   getMonitoringDaily,
+  triggerMonitoringRecompute,
+  getMonitoringConsentStatus,
   submitAgentConsent,
   submitMonitoringContent,
   getMonitoringContent,
@@ -103,6 +105,25 @@ router.get(
   requireAuth,
   requireRole("owner", "admin"),
   getMonitoringDaily
+);
+
+// Manual derivation trigger + queue/runner diagnostics. Owner/admin. Recovery
+// for hosts that suspend the background timer.
+router.post(
+  "/recompute",
+  requireAuth,
+  requireRole("owner", "admin"),
+  triggerMonitoringRecompute
+);
+
+// §5b consent status — which monitored users have accepted the current consent
+// document, and the checklist of what remains before capture can run. Owner/admin,
+// read-only.
+router.get(
+  "/consents",
+  requireAuth,
+  requireRole("owner", "admin"),
+  getMonitoringConsentStatus
 );
 
 // §5b captured content read. Owner-only by default; a non-owner is allowed only

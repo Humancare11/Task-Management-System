@@ -39,11 +39,46 @@ const NIGHTLY_INTERVAL_MS =
 const MAX_PER_TICK = 50;
 const MAX_ATTEMPTS = 5;
 const RETRY_BACKOFF_MS = 5 * 60 * 1000;
+// If a drain has held the lock longer than this it is presumed hung (a stalled
+// DB call, a process that was frozen mid-drain by the host); the next caller
+// force-resets so the queue can never wedge permanently.
+const DRAIN_STALL_MS =
+  Number(process.env.MONITORING_DRAIN_STALL_MS) > 0
+    ? Number(process.env.MONITORING_DRAIN_STALL_MS)
+    : 3 * 60 * 1000;
+// A row left in 'running' longer than this is an orphan — the process that
+// claimed it died mid-derive (a redeploy, or a shared host killing an idle
+// worker). Reclaim it to 'pending' so it is retried instead of stuck forever.
+const RUNNING_STALE_MS =
+  Number(process.env.MONITORING_RUNNING_STALE_MS) > 0
+    ? Number(process.env.MONITORING_RUNNING_STALE_MS)
+    : 10 * 60 * 1000;
 
 let drainTimer = null;
 let nightlyTimer = null;
 let draining = false;
+let drainStartedAt = 0;
 let started = false;
+
+function isEnabled() {
+  return String(process.env.MONITORING_RECOMPUTE_RUNNER_ENABLED || "true") !== "false";
+}
+
+// Return orphaned 'running' rows to 'pending'. Cheap; run once per drain.
+async function reclaimStaleRunning() {
+  const [n] = await MonitoringRecomputeQueue.update(
+    { status: "pending" },
+    {
+      where: {
+        status: "running",
+        updated_at: { [Op.lt]: new Date(Date.now() - RUNNING_STALE_MS) },
+      },
+    }
+  );
+  if (n > 0) {
+    console.warn(`Recompute: reclaimed ${n} orphaned 'running' row(s) to 'pending'.`);
+  }
+}
 
 async function claimOne() {
   const row = await MonitoringRecomputeQueue.findOne({
@@ -89,9 +124,20 @@ async function finishOne(row, err) {
 }
 
 async function drainOnce() {
-  if (draining) return;
+  if (draining) {
+    if (Date.now() - drainStartedAt > DRAIN_STALL_MS) {
+      console.error(
+        `Recompute drain held for >${DRAIN_STALL_MS}ms — assuming it is hung and resetting.`
+      );
+      draining = false;
+    } else {
+      return;
+    }
+  }
   draining = true;
+  drainStartedAt = Date.now();
   try {
+    await reclaimStaleRunning();
     for (let i = 0; i < MAX_PER_TICK; i += 1) {
       // eslint-disable-next-line no-await-in-loop
       const row = await claimOne();
@@ -163,8 +209,10 @@ async function nightlyPass() {
 
 function start() {
   if (started) return;
-  if (String(process.env.MONITORING_RECOMPUTE_RUNNER_ENABLED || "true") === "false") {
-    console.log("Monitoring recompute runner disabled by env.");
+  if (!isEnabled()) {
+    console.log(
+      "Monitoring recompute runner DISABLED by MONITORING_RECOMPUTE_RUNNER_ENABLED=false."
+    );
     return;
   }
   started = true;
@@ -186,7 +234,7 @@ function start() {
   console.log(
     `Monitoring recompute runner started (drain ${DRAIN_INTERVAL_MS / 1000}s, nightly ${
       NIGHTLY_INTERVAL_MS / 3600000
-    }h).`
+    }h). Also drains opportunistically on event ingest.`
   );
 }
 
@@ -198,4 +246,30 @@ function stop() {
   started = false;
 }
 
-module.exports = { start, stop, drainOnce, nightlyPass, claimOne };
+/**
+ * Opportunistic drain, called from the event-ingest request path. This is the
+ * primary derivation trigger in environments where the host suspends idle
+ * background timers (Passenger / shared hosting): every batch of events that
+ * reaches the server also nudges the queue forward. Fire-and-forget — never
+ * throws, never blocks the caller, and `drainOnce`'s own guard prevents
+ * overlap.
+ */
+function kick() {
+  if (!isEnabled()) return;
+  Promise.resolve()
+    .then(() => drainOnce())
+    .catch((e) => console.error("recompute kick:", e));
+}
+
+/** Snapshot for the manual-trigger endpoint / diagnostics. */
+function status() {
+  return {
+    enabled: isEnabled(),
+    started,
+    draining,
+    drain_interval_ms: DRAIN_INTERVAL_MS,
+    nightly_interval_ms: NIGHTLY_INTERVAL_MS,
+  };
+}
+
+module.exports = { start, stop, drainOnce, nightlyPass, claimOne, kick, status };

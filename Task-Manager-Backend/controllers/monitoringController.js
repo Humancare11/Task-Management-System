@@ -10,6 +10,7 @@ const {
   MonitoringAppSession,
   MonitoringWebSession,
   MonitoringUserDaySummary,
+  MonitoringRecomputeQueue,
   MonitoringConsent,
   MonitoringOrgSetting,
   MonitoringBlocklistDomain,
@@ -21,10 +22,16 @@ const {
 } = require("../models");
 const { serverLocalDate, isClockSuspect } = require("../utils/monitoringTime");
 const { enqueueRecompute } = require("../utils/monitoringRecompute");
+const monitoringRecomputeRunner = require("../services/monitoringRecomputeRunner");
 const {
   CONTENT_CAPTURE_LEGALLY_APPROVED,
   CONTENT_CONSENT_DOCUMENT_VERSION,
 } = require("../config/contentCaptureGate");
+const {
+  CONTENT_CONSENT_DOCUMENT_TITLE,
+  CONTENT_CONSENT_DOCUMENT_TEXT,
+} = require("../config/contentConsentDocument");
+const { isConfigured: contentKeysConfigured } = require("../utils/contentCrypto");
 const monitoringContent = require("../services/monitoringContent");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -374,12 +381,14 @@ exports.agentHeartbeat = async (req, res) => {
     agent.last_seen_at = new Date();
     await agent.save();
 
-    // §5b content-capture signal for the agent. The agent uses this to decide
-    // whether to show the consent screen and whether to run the capture module
-    // at all. `active` is only ever true when the legal gate is open AND the org
-    // enabled it AND a matching consent row exists — capture stays fully off
-    // otherwise. While CONTENT_CAPTURE_LEGALLY_APPROVED is false this block is
-    // always { active: false, ... }.
+    // §5b content-capture signal for the agent.
+    //   - `consent_required` is true whenever the ORG has enabled content
+    //     capture — independent of the legal gate — so the agent shows the
+    //     notice and consent rows can be collected BEFORE the flag is flipped.
+    //   - `active` (the only thing that turns capture on) still requires ALL of:
+    //     legal gate open AND org enabled AND a matching consent row.
+    //   - the full notice text is included only while consent is still needed,
+    //     to keep routine heartbeats small.
     let contentCapture = {
       active: false,
       legal_gate_open: CONTENT_CAPTURE_LEGALLY_APPROVED,
@@ -394,7 +403,7 @@ exports.agentHeartbeat = async (req, res) => {
         raw: true,
       });
       const orgEnabled = Boolean(orgSettings && orgSettings.content_capture_enabled);
-      if (CONTENT_CAPTURE_LEGALLY_APPROVED && orgEnabled) {
+      if (orgEnabled) {
         const consent = await MonitoringConsent.findOne({
           where: {
             user_id: agent.user_id,
@@ -402,14 +411,19 @@ exports.agentHeartbeat = async (req, res) => {
           },
           raw: true,
         });
+        const consented = Boolean(consent);
         contentCapture = {
-          active: Boolean(consent),
-          legal_gate_open: true,
+          active: CONTENT_CAPTURE_LEGALLY_APPROVED && consented,
+          legal_gate_open: CONTENT_CAPTURE_LEGALLY_APPROVED,
           org_enabled: true,
           consent_required: true,
-          consented: Boolean(consent),
+          consented,
           document_version: CONTENT_CONSENT_DOCUMENT_VERSION,
         };
+        if (!consented) {
+          contentCapture.document_title = CONTENT_CONSENT_DOCUMENT_TITLE;
+          contentCapture.document_text = CONTENT_CONSENT_DOCUMENT_TEXT;
+        }
       }
     } catch (ccErr) {
       console.error("Heartbeat content-capture check failed:", ccErr);
@@ -712,6 +726,12 @@ exports.submitMonitoringEvents = async (req, res) => {
       console.error("Monitoring agent liveness update failed:", livenessErr);
     }
 
+    // Derivation trigger. The background runner is a timer, which shared hosts
+    // (Passenger) suspend when the app is idle — so every ingest also nudges the
+    // recompute queue forward. Fire-and-forget: never blocks or fails the
+    // response, and drainOnce()'s own guard prevents overlap.
+    monitoringRecomputeRunner.kick();
+
     return res.status(201).json({
       message: "Monitoring events received.",
       accepted_count: acceptedEventIds.length,
@@ -976,6 +996,171 @@ exports.getMonitoringDaily = async (req, res) => {
     return res.status(500).json({
       message: "Server error while fetching monitoring day detail.",
     });
+  }
+};
+
+// POST /api/monitoring/recompute   { date?, agent_id?, user_id? }
+// Owner/admin. Manual derivation trigger + diagnostics. Recovery tool for
+// environments where the background runner's timer gets suspended (shared
+// hosting / Passenger). Does NOT change derivation logic — it just runs the
+// existing drainOnce() now, optionally forcing specific (agent, date) rows due
+// first (bypassing the ingest debounce). Org-scoped.
+exports.triggerMonitoringRecompute = async (req, res) => {
+  try {
+    const organizationId = req.user.organization_id;
+    const { date, agent_id, user_id } = req.body || {};
+
+    const agentWhere = { organization_id: organizationId };
+    if (agent_id) agentWhere.id = agent_id;
+    if (user_id) agentWhere.user_id = user_id;
+    const orgAgents = await MonitoringAgent.findAll({
+      where: agentWhere,
+      attributes: ["id"],
+      raw: true,
+    });
+    const agentIds = orgAgents.map((a) => a.id);
+
+    let forced = 0;
+    if (agentIds.length > 0) {
+      const now = new Date();
+      if (date && DATE_RE.test(date)) {
+        // Enqueue (or re-arm) that day for each targeted agent, due immediately.
+        for (const id of agentIds) {
+          // eslint-disable-next-line no-await-in-loop
+          await MonitoringRecomputeQueue.upsert({
+            agent_id: id,
+            local_date: date,
+            status: "pending",
+            not_before: now,
+          });
+          forced += 1;
+        }
+      }
+      // Make every not-yet-done row for this org's agents runnable right now:
+      // pending -> due now (ignore debounce/backoff), and reclaim any 'running'
+      // orphan left by a killed worker. Rows in 'error' are left alone.
+      await MonitoringRecomputeQueue.update(
+        { status: "pending", not_before: now },
+        {
+          where: {
+            status: { [Op.in]: ["pending", "running"] },
+            agent_id: { [Op.in]: agentIds },
+          },
+        }
+      );
+    }
+
+    await monitoringRecomputeRunner.drainOnce();
+
+    const queueRows = await MonitoringRecomputeQueue.findAll({
+      where: agentIds.length ? { agent_id: { [Op.in]: agentIds } } : {},
+      attributes: ["agent_id", "local_date", "status", "attempts", "last_error", "not_before"],
+      order: [["local_date", "DESC"]],
+      raw: true,
+    });
+
+    return res.json({
+      message: "Recompute drained.",
+      forced_due: forced,
+      runner: monitoringRecomputeRunner.status(),
+      queue: queueRows,
+    });
+  } catch (error) {
+    console.error("Trigger monitoring recompute error:", error);
+    return res.status(500).json({
+      message: "Server error while running recompute.",
+    });
+  }
+};
+
+// GET /api/monitoring/consents
+// Owner/admin. For the CURRENT consent document version: which monitored users
+// (users with an active agent) have accepted, and the checklist of what still
+// has to be true before content capture can run. Read-only — changes nothing.
+exports.getMonitoringConsentStatus = async (req, res) => {
+  try {
+    const organizationId = req.user.organization_id;
+
+    const agents = await MonitoringAgent.findAll({
+      where: { organization_id: organizationId, status: "active" },
+      attributes: ["user_id"],
+      raw: true,
+    });
+    const userIds = [...new Set(agents.map((a) => a.user_id))];
+
+    const [users, consents, orgSettings] = await Promise.all([
+      userIds.length
+        ? User.findAll({
+            where: { id: { [Op.in]: userIds } },
+            attributes: ["id", "first_name", "last_name", "email"],
+            raw: true,
+          })
+        : [],
+      userIds.length
+        ? MonitoringConsent.findAll({
+            where: {
+              user_id: { [Op.in]: userIds },
+              document_version: CONTENT_CONSENT_DOCUMENT_VERSION,
+            },
+            attributes: ["user_id", "accepted_at", "method"],
+            raw: true,
+          })
+        : [],
+      MonitoringOrgSetting.findOne({
+        where: { organization_id: organizationId },
+        raw: true,
+      }),
+    ]);
+
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const consentByUser = new Map(consents.map((c) => [c.user_id, c]));
+
+    const rows = userIds
+      .map((uid) => {
+        const u = userById.get(uid) || { id: uid };
+        const c = consentByUser.get(uid) || null;
+        const name =
+          `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() ||
+          u.email ||
+          `User ${uid}`;
+        return {
+          user_id: uid,
+          name,
+          email: u.email || null,
+          consented: Boolean(c),
+          accepted_at: c ? c.accepted_at : null,
+          method: c ? c.method : null,
+        };
+      })
+      .sort(
+        (a, b) =>
+          Number(a.consented) - Number(b.consented) || a.name.localeCompare(b.name)
+      );
+
+    const consentedCount = rows.filter((r) => r.consented).length;
+    const allConsented = rows.length > 0 && consentedCount === rows.length;
+
+    return res.json({
+      document_version: CONTENT_CONSENT_DOCUMENT_VERSION,
+      monitored_user_count: rows.length,
+      consented_count: consentedCount,
+      all_monitored_users_consented: allConsented,
+      users: rows,
+      // What still has to be true before capture can run (each independent):
+      remaining_to_enable_capture: {
+        all_monitored_users_consented: allConsented,
+        encryption_keys_configured: contentKeysConfigured(),
+        org_setting_content_capture_enabled: Boolean(
+          orgSettings && orgSettings.content_capture_enabled
+        ),
+        legal_gate_CONTENT_CAPTURE_LEGALLY_APPROVED: CONTENT_CAPTURE_LEGALLY_APPROVED,
+      },
+    });
+  } catch (error) {
+    console.error("Get monitoring consent status error:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error while fetching consent status." });
   }
 };
 

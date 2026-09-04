@@ -58,13 +58,16 @@ Confirmed no remaining references (grep + `vite build`). `MonitoringCard`, `Moni
 ### Env config — the deploy blocker
 | File | Change |
 |---|---|
-| `config/config.js` | Rewritten. `development` / `test` → `DB_*` (localhost defaults). `production` → **`PROD_DB_*`, required** — a missing `PROD_DB_HOST` / `PROD_DB_NAME` / `PROD_DB_USER` **throws** ("Refusing to fall back to the development / localhost database"), and a localhost `PROD_DB_HOST` logs a loud warning. Lazy getter, so dev/test/CLI never trip it. |
+| `config/config.js` | `development` / `test` read `DB_*`. `production` **prefers `PROD_DB_*` and falls back to `DB_*`** when they're not set — plain objects, **no throw**, so an existing deploy that only sets `DB_*` keeps working. A `NODE_ENV=production` boot with no `PROD_DB_HOST` logs a warning. (An earlier draft of this file threw on missing `PROD_DB_*`; that was walked back — see the 2026-09-03 hotfix note below — because it can take down a working deploy, and hosts that co-locate MySQL legitimately use `DB_HOST=localhost`.) |
 | `config/db.js` | Now consumes `config/config.js` keyed by `NODE_ENV` (was reading `process.env.DB_*` directly). Startup log shows which env + host it connected to. |
-| `scripts/start.js` | **New** production entrypoint — forces `NODE_ENV=production` cross-platform (no `NODE_ENV=x node …` shell dependency). |
-| `package.json` | `migrate` → dev (`sequelize-cli db:migrate`, no `--env production`). New `migrate:prod`, `migrate:undo`, `migrate:status`. `start` → `npm run migrate:prod && node scripts/start.js`. `dev` unchanged. |
-| `.env.example` | Documents the `DB_*` (local) vs `PROD_DB_*` (deploy) split. |
+| `package.json` | `migrate` → dev (`sequelize-cli db:migrate`, no `--env production`). New `migrate:prod`, `migrate:undo`, `migrate:status`. `start` → `npm run migrate:prod && node index.js` (unchanged shape from before). `dev` unchanged. |
+| `.env.example` | Documents the `DB_*` (local) vs optional `PROD_DB_*` (deploy) split. |
 
-**Deploy now needs:** `NODE_ENV=production` + `PROD_DB_HOST` / `PROD_DB_PORT` / `PROD_DB_NAME` / `PROD_DB_USER` / `PROD_DB_PASSWORD` set in the hosting environment. `npm start` runs the prod migration then boots. Local dev is unchanged (`npm run dev`).
+**Deploy:** `npm start` runs the prod migration then boots, exactly as before. To keep prod and dev credentials distinct, set `PROD_DB_*` in the hosting environment — but it is **optional**; without it, prod uses `DB_*`.
+
+### 2026-09-03 hotfix — production outage
+
+The stricter `config/config.js` (throw on missing `PROD_DB_*`, via a lazy getter) was deployed and **took production down (503)**: the hosting env had `DB_*` set, not `PROD_DB_*`, so `npm start` → `migrate:prod` accessed `config.production` → threw → the Node app never booted → Hostinger served its own 503 page (which, having no `Access-Control-Allow-Origin`, surfaced in the browser as a *CORS* error on `/api/auth/login`). Fix: `config.production` now falls back to `DB_*` and never throws; `scripts/start.js` (which forced `NODE_ENV=production`) was removed. **Redeploy the backend to recover.**
 
 ---
 
@@ -76,7 +79,7 @@ Agent    (node --test)   46 / 46   pass   (+7  config.test.js — pipelineMode m
 Frontend (vite build)    clean
 ```
 
-Live-verified: removed routes → 404; `/agent/activities` + `/activities` → `Deprecation`/`Sunset` headers + server warn; `config.production` throws without `PROD_DB_*`; dev DB still connects; migrations all `up`.
+Live-verified: removed routes → 404; `/agent/activities` + `/activities` → `Deprecation`/`Sunset` headers + server warn; `config.production` falls back to `DB_*` (warns, does not throw); `migrate:prod` + dev DB connect; migrations all `up`.
 
 ---
 
@@ -140,6 +143,5 @@ functional.
 
 ### Backend / DB
 Nothing to revert — `monitoring_activities` and `monitoring_enrollments` are
-intact. The only backend-side change that matters for a rollback is the env
-config: a deploy that was relying on the old "all envs read `DB_*`" behaviour
-must now set `PROD_DB_*` (this is the intended fix, not something to revert).
+intact. The env-config change is backward compatible: a deploy that only sets
+`DB_*` keeps working; `PROD_DB_*` is an optional override.

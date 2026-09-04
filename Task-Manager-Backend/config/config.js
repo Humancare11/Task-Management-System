@@ -1,20 +1,17 @@
 "use strict";
 
 /**
- * Database configuration — the SINGLE source of truth for both the app runtime
+ * Database configuration — single source of truth for the app runtime
  * (config/db.js) and sequelize-cli migrations (.sequelizerc points here).
  *
- * Phase 5 fix: the three environments no longer collapse onto one set of
- * localhost-pointed vars.
+ * All environments read DB_* by default. Production ADDITIONALLY honours
+ * optional PROD_DB_* overrides so a real deploy can use credentials that are
+ * distinct from local development without touching DB_*. If PROD_DB_* is not
+ * set, production falls back to DB_* — the long-standing behaviour — so this
+ * never breaks an existing deploy.
  *
- *   development / test  ->  DB_* env vars, localhost-friendly defaults.
- *   production          ->  PROD_DB_* env vars, REQUIRED (host, name, user).
- *                           Requesting the production config with any of those
- *                           missing throws immediately — a real deploy fails
- *                           loudly instead of silently talking to localhost.
- *
- * On a real deploy set NODE_ENV=production and the PROD_DB_* vars in the hosting
- * environment (not in a committed .env).
+ * Recommended for a real deploy: set PROD_DB_HOST / PROD_DB_PORT / PROD_DB_NAME
+ * / PROD_DB_USER / PROD_DB_PASSWORD in the hosting environment.
  */
 
 require("dotenv").config();
@@ -28,56 +25,40 @@ function num(value, fallback) {
 
 const development = {
   ...SHARED,
-  username: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "task_manager",
+  username: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   host: process.env.DB_HOST || "127.0.0.1",
   port: num(process.env.DB_PORT, 3306),
 };
 
 const test = {
   ...development,
-  database: process.env.TEST_DB_NAME || process.env.DB_NAME || "task_manager",
+  database: process.env.TEST_DB_NAME || process.env.DB_NAME,
 };
 
-function buildProduction() {
-  const missing = [];
-  const host = process.env.PROD_DB_HOST;
-  const database = process.env.PROD_DB_NAME;
-  const username = process.env.PROD_DB_USER;
-  if (!host) missing.push("PROD_DB_HOST");
-  if (!database) missing.push("PROD_DB_NAME");
-  if (!username) missing.push("PROD_DB_USER");
-  if (missing.length) {
-    throw new Error(
-      `[db config] production requires ${missing.join(", ")}. ` +
-        "Set the PROD_DB_* vars in the deploy environment. " +
-        "Refusing to fall back to the development / localhost database."
-    );
-  }
-  if (/^(localhost|127\.0\.0\.1|::1)$/i.test(host.trim())) {
-    console.warn(
-      `[db config] WARNING: PROD_DB_HOST is "${host}" — the production ` +
-        "database is pointed at localhost. This is almost certainly wrong."
-    );
-  }
-  return {
-    ...SHARED,
-    username,
-    password: process.env.PROD_DB_PASSWORD || "",
-    database,
-    host,
-    port: num(process.env.PROD_DB_PORT, 3306),
-  };
+// Prefer PROD_DB_*, fall back to DB_*.
+const pick = (prodKey, devKey) =>
+  process.env[prodKey] !== undefined && process.env[prodKey] !== ""
+    ? process.env[prodKey]
+    : process.env[devKey];
+
+const production = {
+  ...SHARED,
+  username: pick("PROD_DB_USER", "DB_USER"),
+  password: pick("PROD_DB_PASSWORD", "DB_PASSWORD"),
+  database: pick("PROD_DB_NAME", "DB_NAME"),
+  host: pick("PROD_DB_HOST", "DB_HOST") || "127.0.0.1",
+  port: num(process.env.PROD_DB_PORT || process.env.DB_PORT, 3306),
+};
+
+if (process.env.NODE_ENV === "production" && !process.env.PROD_DB_HOST) {
+  // Not fatal — many hosts co-locate MySQL and DB_HOST=localhost is correct
+  // there — but flag it so a misconfigured deploy is visible in the logs.
+  console.warn(
+    "[db config] NODE_ENV=production but PROD_DB_HOST is not set — falling back " +
+      `to DB_* (host: ${production.host}). Set PROD_DB_* to make prod credentials explicit.`
+  );
 }
 
-// Lazy: accessing `.production` (sequelize-cli --env production, or config/db.js
-// when NODE_ENV=production) is what triggers the required-vars check. `require`
-// of this file, and reading development/test, never do.
-module.exports = {
-  development,
-  test,
-  get production() {
-    return buildProduction();
-  },
-};
+module.exports = { development, test, production };

@@ -154,7 +154,7 @@
           type="text"
           spellcheck="false"
           autocomplete="off"
-          placeholder="https://localhost:5000/api"
+          placeholder="https://darkviolet-cobra-939760.hostingersite.com/api"
           
         />
         <p class="field-hint">
@@ -211,29 +211,18 @@
     </div>
 
     <!-- ---------- §5b CONTENT-CAPTURE CONSENT VIEW ---------- -->
-    <!-- PLACEHOLDER TEXT. The wording below MUST be replaced with the
-         legally-reviewed consent document before CONTENT_CAPTURE_LEGALLY_APPROVED
-         is ever set to true. The document version string comes from the server. -->
+    <!-- The notice text is served by the backend (single source of truth:
+         Task-Manager-Backend/config/contentConsentDocument.js) via the heartbeat
+         and rendered verbatim below. Accept records a monitoring_consents row;
+         Decline / close records nothing and no capture occurs. -->
     <div class="card hidden" id="consent-view">
-      <h1>Additional Monitoring Consent</h1>
-      <p class="subtitle" style="margin-bottom: 14px;">
-        Your organization has asked to additionally record the
-        <strong>search terms and AI assistant prompts</strong> you type in a
-        small set of sites (Google, YouTube, ChatGPT, Claude, Gemini).
-      </p>
-      <div class="status-list" style="display:block; max-height:180px; overflow:auto; font-size:13px; line-height:1.5;">
-        <p style="margin-bottom:8px;">Before you agree, please understand:</p>
-        <ul style="padding-left:18px; color:var(--muted);">
-          <li>Only the text of the search / prompt box is recorded — never page contents, passwords, or other fields.</li>
-          <li>Nothing is recorded on banking, payment, healthcare, or government sites, or in private/incognito windows.</li>
-          <li>Recorded text is encrypted and automatically deleted after your organization's retention period (30–90 days).</li>
-          <li>Access is restricted and every view is logged.</li>
-          <li><em>[Full legally-reviewed text pending — do not enable in production.]</em></li>
-        </ul>
+      <h1 id="consent-title">Notice &amp; Consent</h1>
+      <pre id="consent-text" style="white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto; font-family:inherit; font-size:12.5px; line-height:1.55; color:var(--ink); background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:12px; margin:12px 0;"></pre>
+      <p class="field-hint" id="consent-version" style="margin-top:2px;"></p>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="primary" id="consentAcceptBtn" style="flex:1;">I Accept</button>
+        <button class="link" id="consentDeclineBtn" style="flex:1;">I Decline</button>
       </div>
-      <p class="field-hint" id="consent-version" style="margin-top:10px;"></p>
-      <button class="primary" id="consentAcceptBtn">I Agree</button>
-      <button class="link" id="consentDeclineBtn">Not now</button>
       <div class="message" id="consent-message"></div>
     </div>
 
@@ -243,11 +232,11 @@
       // Default backend for production testing. The real value is supplied by the
       // main process via state.defaultApiBaseUrl; this is only the fallback used
       // if that value is ever missing. The field stays editable for local dev.
-      const DEFAULT_API_BASE_URL = "https://localhost:5000/api";
+      const DEFAULT_API_BASE_URL = "https://darkviolet-cobra-939760.hostingersite.com/api";
 
       const ERROR_TEXT = {
         invalid_url:
-          "Enter a valid API URL, for example https://localhost:5000/api",
+          "Enter a valid API URL, for example https://darkviolet-cobra-939760.hostingersite.com/api",
         missing: "Please fill in every field.",
         auth: "Unable to connect. Please check the Agent UUID and Agent Secret.",
         network:
@@ -268,11 +257,13 @@
 
       let pendingConsentVersion = null;
 
-      function showConsent(documentVersion) {
-        pendingConsentVersion = documentVersion || null;
-        $("consent-version").textContent = documentVersion
-          ? "Consent document: " + documentVersion
-          : "";
+      function showConsent(doc) {
+        if (!doc || !doc.documentVersion || !doc.documentText) return;
+        pendingConsentVersion = doc.documentVersion;
+        $("consent-title").textContent = doc.documentTitle || "Notice & Consent";
+        $("consent-text").textContent = doc.documentText;
+        $("consent-version").textContent =
+          "Consent document version: " + doc.documentVersion;
         $("consent-message").className = "message";
         $("consent-message").textContent = "";
         $("consentAcceptBtn").disabled = false;
@@ -280,9 +271,7 @@
       }
 
       if (window.agentSetup.onConsentRequired) {
-        window.agentSetup.onConsentRequired((data) => {
-          showConsent(data && data.documentVersion);
-        });
+        window.agentSetup.onConsentRequired((data) => showConsent(data));
       }
 
       function prefillApiUrl(state) {
@@ -340,6 +329,20 @@
         }
         if (state.mode === "connected") {
           renderConnected(state);
+          // If a consent notice is still pending (window was closed before
+          // deciding), show it again.
+          try {
+            const cs = await window.agentSetup.getConsentState();
+            if (cs && cs.pendingDocumentVersion && cs.pendingDocumentText) {
+              showConsent({
+                documentVersion: cs.pendingDocumentVersion,
+                documentTitle: cs.pendingDocumentTitle,
+                documentText: cs.pendingDocumentText,
+              });
+            }
+          } catch {
+            /* non-fatal */
+          }
         } else {
           showView("setup");
         }
