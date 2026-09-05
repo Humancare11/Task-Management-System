@@ -53,11 +53,19 @@ const DEFAULT_CONTENT_POLL_INTERVAL_SECONDS = 4;
 // being emitted. At ~7 agents this is ~1 small POST per agent per 15s — trivial.
 const DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS = 15;
 
-// Live Screen (opt-in, gated). The agent only polls this fast while the
-// heartbeat reports a session pending; otherwise it is silent. A session is
-// hard-capped at liveScreenMaxSessionSeconds regardless of the viewer.
+// Live Screen (opt-in, gated). Two poll speeds so a new request is picked up
+// quickly without polling fast forever:
+//   idle   — runs continuously whenever the org has the feature enabled, so a
+//            NEW request is noticed within one idle interval instead of
+//            waiting for the next heartbeat (which can be ~30s away).
+//   active — used once a session is pending/connecting/live, for snappier
+//            signaling during the session itself.
+const DEFAULT_LIVE_SCREEN_IDLE_POLL_INTERVAL_SECONDS = 5;
 const DEFAULT_LIVE_SCREEN_POLL_INTERVAL_SECONDS = 2;
-const DEFAULT_LIVE_SCREEN_MAX_SESSION_SECONDS = 30 * 60;
+// 0 = no automatic maximum — the session runs until the viewer, the employee's
+// Stop button, or a real connection failure ends it. Set
+// LIVE_SCREEN_MAX_SESSION_SECONDS to opt back into a cap.
+const DEFAULT_LIVE_SCREEN_MAX_SESSION_SECONDS = 0;
 // Local safety net for a peer connection that never establishes (STUN-only on a
 // strict NAT, etc.) — slightly longer than the server's own connect timeout so
 // the server usually reports the failure first.
@@ -189,6 +197,10 @@ function buildConfig(fallback = {}) {
         ),
 
         // --- Live Screen (gated; activation is driven by the heartbeat) ---
+        liveScreenIdlePollIntervalSeconds: positiveNumberOr(
+            layered("LIVE_SCREEN_IDLE_POLL_INTERVAL_SECONDS", "liveScreenIdlePollIntervalSeconds"),
+            DEFAULT_LIVE_SCREEN_IDLE_POLL_INTERVAL_SECONDS,
+        ),
         liveScreenPollIntervalSeconds: positiveNumberOr(
             layered("LIVE_SCREEN_POLL_INTERVAL_SECONDS", "liveScreenPollIntervalSeconds"),
             DEFAULT_LIVE_SCREEN_POLL_INTERVAL_SECONDS,

@@ -47,6 +47,12 @@ function initSocket(server) {
     // Personal room — used for direct notifications
     socket.join(`user:${socket.user.id}`);
 
+    // This user reconnected (new tab, or the same tab's transport recovered
+    // from a blip) — cancel any pending "end their Live Screen session(s)"
+    // grace timer from a previous disconnect so a brief network hiccup never
+    // kills a live call.
+    liveScreen.cancelScheduledViewerDisconnect(socket.user.id);
+
     // Organization room — used for the org-wide activity feed. The id comes
     // from the verified JWT (socket.user), never from a client message, so a
     // client cannot subscribe to another organization's activity.
@@ -312,7 +318,12 @@ function wireLiveScreenSocket(socket) {
   });
 
   socket.on("disconnect", () => {
-    liveScreen.endAllForViewer(user.id, "viewer_disconnected");
+    // Don't end the session on the spot — the signaling socket dropping is
+    // not the same as the viewer wanting to stop (WiFi blip, sleep, a proxy
+    // idling the websocket). Give them DISCONNECT_GRACE_MS to reconnect;
+    // "connection" above cancels this if they do. The WebRTC media itself is
+    // a separate P2P path and is untouched by this socket dropping.
+    liveScreen.scheduleViewerDisconnect(user.id, "viewer_disconnected");
   });
 }
 

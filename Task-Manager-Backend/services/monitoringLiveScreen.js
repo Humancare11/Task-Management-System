@@ -19,13 +19,22 @@ const { LIVE_SCREEN_LEGALLY_APPROVED } = require("../config/liveScreenGate");
 const { canViewContent } = require("./monitoringContent");
 
 const num = (v, d) => (Number(v) > 0 ? Number(v) : d);
-const MAX_SESSION_MS = num(process.env.LIVE_SCREEN_MAX_SESSION_MS, 30 * 60 * 1000);
+// 0 = no automatic maximum — a session runs until explicitly ended (by the
+// viewer, the employee's Stop button, or a real connection failure). Set
+// LIVE_SCREEN_MAX_SESSION_MS to a positive number to opt back into a cap.
+const MAX_SESSION_MS = num(process.env.LIVE_SCREEN_MAX_SESSION_MS, 0);
 const REQUEST_TIMEOUT_MS = num(process.env.LIVE_SCREEN_REQUEST_TIMEOUT_MS, 45 * 1000);
 // After the offer is exchanged, the peers have this long to actually connect.
 // STUN-only fails here on strict/symmetric-NAT networks (no TURN relay) — the
 // session ends cleanly with reason "connect_failed" instead of hanging.
 const CONNECT_TIMEOUT_MS = num(process.env.LIVE_SCREEN_CONNECT_TIMEOUT_MS, 40 * 1000);
 const ENDED_GRACE_MS = 15 * 1000; // keep an ended session briefly so a late poll sees "stop"
+// A viewer's signaling socket can drop for reasons that have nothing to do
+// with wanting to end the session (WiFi blip, laptop sleep, a corporate proxy
+// idling the websocket, a backgrounded tab). Give the SAME viewer this long to
+// reconnect before actually ending their session(s) — the WebRTC media path is
+// independent of this signaling socket, so a live call survives the blip.
+const DISCONNECT_GRACE_MS = num(process.env.LIVE_SCREEN_DISCONNECT_GRACE_MS, 20 * 1000);
 
 /** ICE/TURN servers for both peers.
  *
@@ -208,9 +217,11 @@ function createSession({ id, organizationId, viewer, targetUserId, agentId, acce
     () => endSession(id, "agent_unavailable"),
     REQUEST_TIMEOUT_MS,
   );
-  s.timers.max = setTimeout(() => endSession(id, "max_duration"), MAX_SESSION_MS);
   if (s.timers.request.unref) s.timers.request.unref();
-  if (s.timers.max.unref) s.timers.max.unref();
+  if (MAX_SESSION_MS > 0) {
+    s.timers.max = setTimeout(() => endSession(id, "max_duration"), MAX_SESSION_MS);
+    if (s.timers.max.unref) s.timers.max.unref();
+  }
 
   sessions.set(id, s);
   emitter.emit("session", { type: "requested", session: publicView(s) });
@@ -323,6 +334,30 @@ function endAllForViewer(viewerUserId, reason = "viewer_disconnected") {
   }
 }
 
+// viewerUserId -> Timeout. A signaling-socket disconnect starts this grace
+// timer instead of ending the session outright; connecting again (same user,
+// any tab) cancels it. Only a disconnect that outlasts the grace period is
+// treated as a real "the viewer left".
+const pendingViewerDisconnects = new Map();
+
+function cancelScheduledViewerDisconnect(viewerUserId) {
+  const t = pendingViewerDisconnects.get(viewerUserId);
+  if (t) {
+    clearTimeout(t);
+    pendingViewerDisconnects.delete(viewerUserId);
+  }
+}
+
+function scheduleViewerDisconnect(viewerUserId, reason = "viewer_disconnected") {
+  cancelScheduledViewerDisconnect(viewerUserId);
+  const t = setTimeout(() => {
+    pendingViewerDisconnects.delete(viewerUserId);
+    endAllForViewer(viewerUserId, reason);
+  }, DISCONNECT_GRACE_MS);
+  if (t.unref) t.unref();
+  pendingViewerDisconnects.set(viewerUserId, t);
+}
+
 function activeSessionCount() {
   let n = 0;
   for (const s of sessions.values()) {
@@ -369,6 +404,8 @@ function isSchemaError(err) {
 function _reset() {
   for (const s of sessions.values()) clearTimers(s);
   sessions.clear();
+  for (const t of pendingViewerDisconnects.values()) clearTimeout(t);
+  pendingViewerDisconnects.clear();
   emitter.removeAllListeners();
 }
 
@@ -386,6 +423,8 @@ module.exports = {
   agentIceFor,
   getSession,
   endAllForViewer,
+  scheduleViewerDisconnect,
+  cancelScheduledViewerDisconnect,
   activeSessionCount,
   schemaHealth,
   isSchemaError,

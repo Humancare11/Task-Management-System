@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, MonitorOff, Loader2, Wifi } from "lucide-react";
+import { X, MonitorOff, Loader2, Wifi, Minimize2, Maximize2 } from "lucide-react";
 import { getSocket } from "../../lib/socket.js";
 
 // Live Screen viewer.
@@ -61,6 +61,11 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
   const [message, setMessage] = useState("");
   const [stunOnly, setStunOnly] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // "normal" | "min" | "max" — purely a display state. It never touches `open`,
+  // the socket, or the RTCPeerConnection, so minimizing/maximizing cannot
+  // disconnect or stop the video/audio. The single <video> element below stays
+  // mounted across all three layouts so its srcObject is never dropped.
+  const [layout, setLayout] = useState("normal");
 
   const teardown = useCallback(
     (notifyServer) => {
@@ -93,6 +98,7 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
 
     setPhase("requesting");
     setMessage("");
+    setLayout("normal"); // fresh session opens at normal size, never pre-minimized
 
     const onOffer = async ({ sessionId, sdp }) => {
       if (cancelled || sessionId !== sessionIdRef.current || !pcRef.current) return;
@@ -215,6 +221,8 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
   if (!open) return null;
 
   const canRetry = phase === "error" || phase === "ended";
+  const isMin = layout === "min";
+  const isMax = layout === "max";
 
   const statusLine =
     {
@@ -225,38 +233,80 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
       error: message || "Error.",
     }[phase] || "";
 
+  const dot = (
+    <span
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+        phase === "live"
+          ? "bg-emerald-500"
+          : phase === "error"
+            ? "bg-red-500"
+            : phase === "ended"
+              ? "bg-slate-400"
+              : "bg-amber-400"
+      }`}
+    />
+  );
+
+  // Minimize / Maximize are purely visual — they only change these container
+  // classes. The <video> element below is never removed from the tree across
+  // layouts, so its srcObject (and therefore the live picture) is unaffected;
+  // neither button touches `open`, the socket listeners, or the
+  // RTCPeerConnection, so they cannot disconnect or stop the video/audio.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative flex w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-hair bg-surface-1 shadow-xl">
-        <div className="flex items-center justify-between gap-3 border-b border-hair px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${
-                phase === "live"
-                  ? "bg-emerald-500"
-                  : phase === "error"
-                    ? "bg-red-500"
-                    : phase === "ended"
-                      ? "bg-slate-400"
-                      : "bg-amber-400"
-              }`}
-            />
-            <h2 className="font-display text-sm font-semibold text-txt-primary">
-              Live Screen — {employeeName || "Employee"}
+    <div
+      className={
+        isMin
+          ? "fixed bottom-4 right-4 z-50"
+          : "fixed inset-0 z-50 flex items-center justify-center p-4"
+      }
+    >
+      {!isMin && <div className="absolute inset-0 bg-black/70" onClick={onClose} />}
+      <div
+        className={`relative flex flex-col overflow-hidden rounded-xl border border-hair bg-surface-1 shadow-xl ${
+          isMin ? "w-72" : isMax ? "h-[92vh] w-full max-w-[96vw]" : "w-full max-w-5xl"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-hair px-3 py-2 sm:px-4 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {dot}
+            <h2 className="truncate font-display text-sm font-semibold text-txt-primary">
+              {isMin ? employeeName || "Employee" : `Live Screen — ${employeeName || "Employee"}`}
             </h2>
-            <span className="text-xs text-txt-muted">{statusLine}</span>
+            {!isMin && <span className="shrink-0 text-xs text-txt-muted">{statusLine}</span>}
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => setLayout(isMin ? "normal" : "min")}
+              className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
+              aria-label={isMin ? "Restore" : "Minimize"}
+              title={isMin ? "Restore" : "Minimize"}
+            >
+              <Minimize2 size={15} />
+            </button>
+            <button
+              onClick={() => setLayout(isMax ? "normal" : "max")}
+              className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
+              aria-label={isMax ? "Restore" : "Maximize"}
+              title={isMax ? "Restore" : "Maximize"}
+            >
+              {isMax ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
+              aria-label="Close"
+              title="Stop & close"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
-        <div className="relative flex aspect-video items-center justify-center bg-black">
+        <div
+          className={`relative flex items-center justify-center bg-black ${
+            isMax ? "min-h-0 flex-1" : "aspect-video"
+          }`}
+        >
           <video
             ref={videoRef}
             autoPlay
@@ -267,45 +317,47 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
           {phase !== "live" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-txt-muted">
               {phase === "error" || phase === "ended" ? (
-                <MonitorOff size={28} />
+                <MonitorOff size={isMin ? 18 : 28} />
               ) : (
-                <Loader2 size={28} className="animate-spin" />
+                <Loader2 size={isMin ? 18 : 28} className="animate-spin" />
               )}
-              <p className="max-w-sm px-6 text-center text-xs">{statusLine}</p>
+              {!isMin && <p className="max-w-sm px-6 text-center text-xs">{statusLine}</p>}
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-hair px-4 py-3 text-[11px] text-txt-muted">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <Wifi size={12} className="shrink-0" />
-            <span className="truncate">
-              Peer-to-peer · not recorded · the employee sees a "your screen is
-              being viewed" banner
-              {stunOnly && " · STUN only (no TURN — may not connect on all networks)"}
+        {!isMin && (
+          <div className="flex items-center justify-between gap-3 border-t border-hair px-4 py-3 text-[11px] text-txt-muted">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Wifi size={12} className="shrink-0" />
+              <span className="truncate">
+                Peer-to-peer · not recorded · the employee sees a "your screen is
+                being viewed" banner
+                {stunOnly && " · STUN only (no TURN — may not connect on all networks)"}
+              </span>
             </span>
-          </span>
-          <div className="flex shrink-0 items-center gap-2">
-            {canRetry && (
+            <div className="flex shrink-0 items-center gap-2">
+              {canRetry && (
+                <button
+                  onClick={() => {
+                    setMessage("");
+                    setPhase("requesting");
+                    setAttempt((n) => n + 1);
+                  }}
+                  className="rounded-md border border-accentblue/40 bg-accentblue/10 px-3 py-1.5 text-xs font-semibold text-accentblue hover:bg-accentblue/20"
+                >
+                  Retry
+                </button>
+              )}
               <button
-                onClick={() => {
-                  setMessage("");
-                  setPhase("requesting");
-                  setAttempt((n) => n + 1);
-                }}
-                className="rounded-md border border-accentblue/40 bg-accentblue/10 px-3 py-1.5 text-xs font-semibold text-accentblue hover:bg-accentblue/20"
+                onClick={onClose}
+                className="rounded-md border border-hair px-3 py-1.5 text-xs font-semibold text-txt-primary hover:bg-surface-2"
               >
-                Retry
+                {phase === "live" || phase === "connecting" ? "Stop & close" : "Close"}
               </button>
-            )}
-            <button
-              onClick={onClose}
-              className="rounded-md border border-hair px-3 py-1.5 text-xs font-semibold text-txt-primary hover:bg-surface-2"
-            >
-              {phase === "live" || phase === "connecting" ? "Stop & close" : "Close"}
-            </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>,
     document.body,

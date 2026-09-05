@@ -366,3 +366,57 @@ test("endAllForViewer tears down every session that viewer opened", () => {
   assert.equal(ls.getSession("v1").status, "ended");
   assert.equal(ls.getSession("v2").status, "ended");
 });
+
+// --- no automatic max-duration cap by default ---------------------------
+
+test("a session has no automatic max-duration cutoff by default", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.agentSignal(42, { session_id: id, type: "offer", sdp: "OFFER" });
+  ls.agentSignal(42, { session_id: id, type: "connected" });
+  // Well past the old 30-minute default and then some.
+  t.mock.timers.tick(6 * 60 * 60 * 1000);
+  assert.equal(ls.getSession(id).status, "live");
+});
+
+// --- viewer disconnect grace period --------------------------------------
+
+test("a viewer disconnect does not end the session before the grace period", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.scheduleViewerDisconnect(OWNER.id, "viewer_disconnected");
+  t.mock.timers.tick(5 * 1000); // well under the 20s grace window
+  assert.notEqual(ls.getSession(id).status, "ended");
+});
+
+test("reconnecting within the grace period cancels the scheduled end", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.agentSignal(42, { session_id: id, type: "offer", sdp: "OFFER" }); // clears the 45s request timeout
+  ls.agentSignal(42, { session_id: id, type: "connected" }); // clears the connect timeout
+  ls.scheduleViewerDisconnect(OWNER.id, "viewer_disconnected");
+  ls.cancelScheduledViewerDisconnect(OWNER.id); // the "connection" handler does this
+  t.mock.timers.tick(5 * 60 * 1000); // long past the grace window, session unaffected
+  assert.equal(ls.getSession(id).status, "live");
+});
+
+test("a disconnect that outlasts the grace period does end the session", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.scheduleViewerDisconnect(OWNER.id, "viewer_disconnected");
+  t.mock.timers.tick(21 * 1000); // just past the 20s default grace window
+  assert.equal(ls.getSession(id).status, "ended");
+  assert.equal(ls.getSession(id).endReason, "viewer_disconnected");
+});
+
+test("scheduling a second disconnect for the same viewer replaces the first timer", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.scheduleViewerDisconnect(OWNER.id, "viewer_disconnected");
+  t.mock.timers.tick(15 * 1000);
+  ls.scheduleViewerDisconnect(OWNER.id, "viewer_disconnected"); // re-armed, not stacked
+  t.mock.timers.tick(15 * 1000); // 30s total, but only 15s since the re-arm
+  assert.notEqual(ls.getSession(id).status, "ended");
+  t.mock.timers.tick(10 * 1000); // now 25s since the re-arm
+  assert.equal(ls.getSession(id).status, "ended");
+});
