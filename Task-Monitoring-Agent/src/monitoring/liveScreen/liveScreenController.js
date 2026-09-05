@@ -253,6 +253,21 @@ async function tick() {
                 await startSession(d);
             } else if (session.id === d.session_id) {
                 applyViewerSignals(d);
+                // The server still thinks this session hasn't connected (it
+                // only switches to "keep" once it has), yet our own peer
+                // connection already reported "connected" locally. The one
+                // ls:connected HTTP POST sent at that moment can be lost to a
+                // network blip; without a resend, the server's own
+                // CONNECT_TIMEOUT_MS would end an otherwise-healthy session
+                // just because that single confirmation never arrived. Resend
+                // on every active poll (every ~2s) until the server confirms
+                // by switching the directive to "keep" — cheap, idempotent on
+                // the backend, and bounded by the session's own lifetime.
+                if (session.connected) {
+                    liveScreenClient
+                        .signal(config, { session_id: session.id, type: "connected" })
+                        .catch(() => {});
+                }
             }
         } else if (d.action === "keep") {
             noneStreak = 0;

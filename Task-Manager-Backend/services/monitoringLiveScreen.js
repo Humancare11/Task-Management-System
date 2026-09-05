@@ -257,6 +257,14 @@ function agentDirective(agentId) {
 function agentSignal(agentId, msg) {
   const s = byAgent(agentId);
   if (!s || !msg || msg.session_id !== s.id) return { ok: false, code: "no_session" };
+  // byAgent() deliberately still returns a session for ENDED_GRACE_MS after it
+  // ended (so a late poll sees "stop"). A late/retried agent signal for that
+  // same id must NOT resurrect it — e.g. a retried "connected" arriving just
+  // after connect_failed already fired would otherwise flip status back to
+  // "live" on a session the viewer has already been told is over.
+  if (s.status === "ended" || s.status === "error") {
+    return { ok: false, code: "session_ended" };
+  }
 
   switch (msg.type) {
     case "offer":
@@ -284,6 +292,13 @@ function agentSignal(agentId, msg) {
       });
       return { ok: true };
     case "connected":
+      // The agent resends this on every active poll until it sees the server
+      // has actually switched to "live" (see liveScreenController.js's
+      // resend-on-mismatch logic) — the single HTTP POST that used to be the
+      // only chance for this to land could be lost to a network blip, leaving
+      // CONNECT_TIMEOUT_MS to end a perfectly healthy session. Idempotent by
+      // design: a repeat once already "live" only re-clears an already-null
+      // timer and skips the status/emit below.
       if (s.timers.connect) {
         clearTimeout(s.timers.connect);
         s.timers.connect = null;

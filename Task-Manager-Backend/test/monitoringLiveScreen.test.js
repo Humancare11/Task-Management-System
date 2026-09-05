@@ -357,6 +357,64 @@ test("connect timeout is cleared once the peer connects", (t) => {
   assert.equal(ls.getSession(id).status, "live");
 });
 
+test("a lost 'connected' confirmation is recovered by a resend before the connect timeout fires", (t) => {
+  // Simulates the agent's resend-on-mismatch behaviour (liveScreenController.js
+  // tick()): it keeps resending "connected" on every active poll (~2s) for as
+  // long as the directive still says "start". The first attempt is "lost" here
+  // (simply never sent) — only the resend 2s later gets through, well inside
+  // the 40s CONNECT_TIMEOUT_MS window.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.agentSignal(42, { session_id: id, type: "offer", sdp: "OFFER" });
+  t.mock.timers.tick(2 * 1000); // first "connected" POST is lost — nothing sent
+  assert.equal(ls.getSession(id).status, "connecting");
+  ls.agentSignal(42, { session_id: id, type: "connected" }); // resend gets through
+  t.mock.timers.tick(60 * 1000); // well past the original 40s deadline
+  assert.equal(ls.getSession(id).status, "live");
+});
+
+test("resending 'connected' after the session is already live is a harmless no-op", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  const seen = [];
+  ls.emitter.on("session", (evt) => seen.push(evt.type));
+  ls.agentSignal(42, { session_id: id, type: "offer", sdp: "OFFER" });
+  ls.agentSignal(42, { session_id: id, type: "connected" });
+  const connectedAtFirst = ls.getSession(id).connectedAt;
+  const liveEventCount = () => seen.filter((t) => t === "live").length;
+  assert.equal(liveEventCount(), 1);
+
+  // Two more resends (as the agent's poll loop would send while racing the
+  // server's own confirmation) must not re-fire the "live" event or move
+  // connectedAt, and must not throw.
+  ls.agentSignal(42, { session_id: id, type: "connected" });
+  ls.agentSignal(42, { session_id: id, type: "connected" });
+  assert.equal(liveEventCount(), 1);
+  assert.equal(ls.getSession(id).connectedAt, connectedAtFirst);
+  assert.equal(ls.getSession(id).status, "live");
+});
+
+test("agentSignal rejects any signal for an already-ended session instead of resurrecting it", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const id = newSession();
+  ls.agentSignal(42, { session_id: id, type: "offer", sdp: "OFFER" });
+  ls.endSession(id, "connect_failed");
+  assert.equal(ls.getSession(id).status, "ended"); // still present (ENDED_GRACE_MS)
+
+  // A late/retried "connected" for the same id — e.g. racing the timeout that
+  // just ended it — must be rejected, not flip the ended session back to "live".
+  const r = ls.agentSignal(42, { session_id: id, type: "connected" });
+  assert.deepEqual(r, { ok: false, code: "session_ended" });
+  assert.equal(ls.getSession(id).status, "ended");
+
+  // Same for a late "offer" or "ice" — nothing should resurrect it.
+  assert.deepEqual(
+    ls.agentSignal(42, { session_id: id, type: "offer", sdp: "LATE" }),
+    { ok: false, code: "session_ended" },
+  );
+  assert.equal(ls.getSession(id).status, "ended");
+});
+
 test("STUN-only default is returned when LIVE_SCREEN_ICE_SERVERS is unset", () => {
   const saved = process.env.LIVE_SCREEN_ICE_SERVERS;
   delete process.env.LIVE_SCREEN_ICE_SERVERS;
