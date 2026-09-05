@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, MonitorOff, Loader2, Wifi, Minimize2, Maximize2 } from "lucide-react";
+import { X, MonitorOff, Loader2, Wifi, Minimize2, Maximize2, Camera, Download } from "lucide-react";
 import { getSocket } from "../../lib/socket.js";
 
 // Live Screen viewer.
@@ -16,6 +16,16 @@ import { getSocket } from "../../lib/socket.js";
 //   emit  livescreen:ice     {sessionId, candidate}
 //   emit  livescreen:stop    {sessionId}
 //   on    livescreen:offer / livescreen:ice / livescreen:status / livescreen:ended
+//
+// Screenshot: a still frame grabbed from the <video> element ITSELF, entirely
+// client-side — no new session, endpoint, or authorization path. It reuses
+// whatever Live Screen session is already open, so the existing gate (who may
+// open Live Screen at all) is the only gate that applies here too. The frame
+// becomes a blob: object URL held only in this component's state; nothing is
+// ever sent to the server. Closing the screenshot, closing/reopening the
+// viewer, or navigating/refreshing the page all drop the reference (the last
+// two also let the browser's normal teardown revoke the object URL), and this
+// component explicitly revokes it too so nothing lingers in memory.
 
 const REQUEST_ERRORS = {
   not_enabled: "Live Screen is not enabled for this organization yet.",
@@ -52,6 +62,18 @@ const NO_CONNECTION_HINT =
 // longer than the agent's and the server's own timeouts.
 const VIEWER_CONNECT_TIMEOUT_MS = 50 * 1000;
 
+// A filesystem-safe, informative name for the downloaded PNG. Client-side
+// only — this never touches the network.
+function screenshotFilename(employeeName, when) {
+  const safeName =
+    String(employeeName || "employee")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "employee";
+  const ts = when.toISOString().replace(/[:.]/g, "-");
+  return `live-screen-${safeName}-${ts}.png`;
+}
+
 export default function LiveScreenViewer({ open, targetUserId, employeeName, onClose }) {
   const videoRef = useRef(null);
   const pcRef = useRef(null);
@@ -66,6 +88,44 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
   // disconnect or stop the video/audio. The single <video> element below stays
   // mounted across all three layouts so its srcObject is never dropped.
   const [layout, setLayout] = useState("normal");
+  // { url, capturedAt } | null — url is a blob: object URL for one PNG frame,
+  // held ONLY here, never uploaded, never written to any storage. See the
+  // module-doc comment above for the full memory-lifecycle contract.
+  const [screenshot, setScreenshot] = useState(null);
+  const screenshotUrlRef = useRef(null); // mirrors screenshot?.url for cleanup
+
+  const clearScreenshot = useCallback(() => {
+    if (screenshotUrlRef.current) {
+      URL.revokeObjectURL(screenshotUrlRef.current);
+      screenshotUrlRef.current = null;
+    }
+    setScreenshot(null);
+  }, []);
+
+  // Grabs the CURRENT frame of the already-playing <video> — no new WebRTC
+  // session, no server round-trip. Requires an actual decoded frame to exist
+  // (readyState >= HAVE_CURRENT_DATA), which in practice means the stream is
+  // live.
+  const captureScreenshot = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
+      const url = URL.createObjectURL(blob);
+      screenshotUrlRef.current = url;
+      setScreenshot({ url, capturedAt: new Date() });
+      // A captured frame is meant to be reviewed — restore from the small
+      // corner widget so it's actually legible. Does not touch the connection.
+      setLayout((l) => (l === "min" ? "normal" : l));
+    }, "image/png");
+  }, []);
 
   const teardown = useCallback(
     (notifyServer) => {
@@ -215,8 +275,11 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
       socket.off("livescreen:status", onStatus);
       socket.off("livescreen:ended", onEnded);
       teardown(true);
+      // Closing the viewer, retrying, or switching target all end this
+      // session boundary — drop any captured screenshot with it.
+      clearScreenshot();
     };
-  }, [open, targetUserId, teardown, attempt]);
+  }, [open, targetUserId, teardown, attempt, clearScreenshot]);
 
   if (!open) return null;
 
@@ -276,6 +339,19 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
+              onClick={captureScreenshot}
+              disabled={phase !== "live"}
+              className={`rounded-md p-1 ${
+                phase === "live"
+                  ? "text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
+                  : "cursor-not-allowed text-txt-muted/40"
+              }`}
+              aria-label="Take a screenshot"
+              title={phase === "live" ? "Take a screenshot" : "Available once the stream is live"}
+            >
+              <Camera size={15} />
+            </button>
+            <button
               onClick={() => setLayout(isMin ? "normal" : "min")}
               className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
               aria-label={isMin ? "Restore" : "Minimize"}
@@ -322,6 +398,44 @@ export default function LiveScreenViewer({ open, targetUserId, employeeName, onC
                 <Loader2 size={isMin ? 18 : 28} className="animate-spin" />
               )}
               {!isMin && <p className="max-w-sm px-6 text-center text-xs">{statusLine}</p>}
+            </div>
+          )}
+
+          {/* Screenshot preview — covers the live video temporarily. The live
+              connection keeps running underneath, untouched; closing this
+              only clears the captured frame from memory. */}
+          {screenshot && (
+            <div className="absolute inset-0 z-10 flex flex-col bg-black">
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+                <img
+                  src={screenshot.url}
+                  alt="Captured screen"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t border-hair/20 bg-surface-1/95 px-3 py-2">
+                <span className="min-w-0 truncate text-[11px] text-txt-muted">
+                  Screenshot · {screenshot.capturedAt.toLocaleTimeString()} · not saved anywhere until you
+                  download it
+                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <a
+                    href={screenshot.url}
+                    download={screenshotFilename(employeeName, screenshot.capturedAt)}
+                    className="flex items-center gap-1 rounded-md border border-accentblue/40 bg-accentblue/10 px-2.5 py-1 text-[11px] font-semibold text-accentblue hover:bg-accentblue/20"
+                  >
+                    <Download size={13} /> Download
+                  </a>
+                  <button
+                    onClick={clearScreenshot}
+                    className="rounded-md p-1 text-txt-muted hover:bg-surface-2 hover:text-txt-primary"
+                    aria-label="Close screenshot"
+                    title="Close"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
