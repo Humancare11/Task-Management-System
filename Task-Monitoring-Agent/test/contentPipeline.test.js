@@ -21,14 +21,95 @@ test("emitContent is a NO-OP until setActive(true)", () => {
   assert.equal(cp._queueLength(), 1);
 });
 
-test("setActive(false) drops the queued plaintext", () => {
+test("setActive(false) clears the local queue immediately (synchronously)", async () => {
   reset();
+  cp.updateContentConfig({
+    contentFlushIntervalSeconds: 30,
+    apiBaseUrl: "http://x",
+    agentUuid: "u",
+    agentSecret: "s",
+  });
+  // Stub so the best-effort save attempt below (fire-and-forget) never makes
+  // a real network call during this test.
+  const contentClient = require("../src/api/contentClient");
+  const orig = contentClient.postContent;
+  let resolvePost;
+  contentClient.postContent = () => new Promise((r) => { resolvePost = r; });
+  try {
+    cp.setActive(true);
+    cp.emitContent({ app: "Chrome", kind: "search", text: "a" });
+    cp.emitContent({ app: "Chrome", kind: "prompt", text: "b" });
+    assert.equal(cp._queueLength(), 2);
+
+    cp.setActive(false);
+    // The local queue is dropped synchronously, before the best-effort save
+    // attempt below has any chance to resolve.
+    assert.equal(cp._queueLength(), 0);
+    assert.equal(cp.isActive(), false);
+
+    resolvePost({ kind: "ok", acceptedIds: [], inserted: 0, dropped: [] });
+    await Promise.resolve(); // let the fire-and-forget flush settle
+  } finally {
+    contentClient.postContent = orig;
+  }
+});
+
+test("setActive(false) tries once to save the queue before dropping it — a successful save reaches the server", async () => {
+  reset();
+  cp.updateContentConfig({
+    contentFlushIntervalSeconds: 30,
+    apiBaseUrl: "http://x",
+    agentUuid: "u",
+    agentSecret: "s",
+  });
   cp.setActive(true);
-  cp.emitContent({ app: "Chrome", kind: "search", text: "a" });
-  cp.emitContent({ app: "Chrome", kind: "prompt", text: "b" });
-  assert.equal(cp._queueLength(), 2);
-  cp.setActive(false);
-  assert.equal(cp._queueLength(), 0);
+  cp.emitContent({ app: "Chrome", kind: "search", text: "please save me" });
+
+  const contentClient = require("../src/api/contentClient");
+  const orig = contentClient.postContent;
+  let seenItems = null;
+  let settle;
+  const settled = new Promise((r) => { settle = r; });
+  contentClient.postContent = async (_cfg, items) => {
+    seenItems = items;
+    settle();
+    return { kind: "ok", acceptedIds: items.map((i) => i.client_event_id), inserted: items.length, dropped: [] };
+  };
+  try {
+    cp.setActive(false);
+    assert.equal(cp._queueLength(), 0); // dropped locally right away
+    await settled; // ...but the best-effort save still went out
+    assert.ok(seenItems && seenItems.length === 1 && seenItems[0].text === "please save me");
+    await Promise.resolve();
+    await Promise.resolve(); // let flushOnce's own continuation (flushing=false) settle
+  } finally {
+    contentClient.postContent = orig;
+  }
+});
+
+test("setActive(false) with a failing best-effort save is no worse than before — no throw, queue still cleared", async () => {
+  reset();
+  cp.updateContentConfig({
+    contentFlushIntervalSeconds: 30,
+    apiBaseUrl: "http://x",
+    agentUuid: "u",
+    agentSecret: "s",
+  });
+  cp.setActive(true);
+  cp.emitContent({ app: "Chrome", kind: "search", text: "network is down" });
+
+  const contentClient = require("../src/api/contentClient");
+  const orig = contentClient.postContent;
+  contentClient.postContent = async () => ({ kind: "network" });
+  try {
+    assert.doesNotThrow(() => cp.setActive(false));
+    assert.equal(cp._queueLength(), 0);
+    assert.equal(cp.isActive(), false);
+    await Promise.resolve();
+    await Promise.resolve(); // let the fire-and-forget attempt settle
+  } finally {
+    contentClient.postContent = orig;
+  }
 });
 
 test("emitContent ignores empty text and clamps fields", () => {

@@ -40,14 +40,31 @@ function updateContentConfig(next) {
     if (next) config = next;
 }
 
-/** Enable/disable capture. Disabling drops anything queued (plaintext). */
+/**
+ * Enable/disable capture. Disabling drops anything not already saved
+ * server-side — but tries once to save it first (see below).
+ */
 function setActive(next) {
     const value = Boolean(next);
     if (value === active) return;
+    if (active && !value && queue.length) {
+        // Best-effort save before dropping. A brief org-setting flicker or a
+        // transient backend hiccup used to silently discard already-captured
+        // plaintext the instant the heartbeat signal turned off, even though
+        // it might reach the server just fine. flushOnce() is still gated on
+        // `active`, which is still true here (only flipped below), so this
+        // actually sends; it's fire-and-forget so setActive stays synchronous
+        // — a successful flush persists these items server-side despite the
+        // local queue being cleared right after, and a slow/failed attempt is
+        // no worse than the previous unconditional drop.
+        flushOnce().catch(() => {});
+    }
     active = value;
     if (!active) {
         if (queue.length) {
-            logger.info(`Content capture disabled — dropping ${queue.length} unsent item(s).`);
+            logger.info(
+                `Content capture disabled — attempting to save ${queue.length} unsent item(s) before dropping the queue.`,
+            );
         }
         queue = [];
     } else {

@@ -568,7 +568,7 @@ function ContentPanel({ userId, date }) {
 
   return (
     <section className="rounded-xl border border-hair bg-surface-1 p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold text-txt-primary">
           <Globe size={15} className="text-txt-muted" /> Search & prompt content
         </h3>
@@ -584,9 +584,9 @@ function ContentPanel({ userId, date }) {
           {state.items.map((it) => (
             <li
               key={it.id}
-              className="flex items-start justify-between gap-3 rounded-lg border border-hair bg-surface-2/50 px-3 py-2 text-xs"
+              className="flex min-w-0 flex-col gap-1 rounded-lg border border-hair bg-surface-2/50 px-3 py-2 text-xs sm:flex-row sm:items-start sm:justify-between sm:gap-3"
             >
-              <span className="min-w-0">
+              <span className="min-w-0 break-words">
                 <span className="mr-2 text-txt-muted">{formatClock(it.captured_at)}</span>
                 <span className="text-txt-primary">
                   {it.undecryptable ? (
@@ -596,7 +596,7 @@ function ContentPanel({ userId, date }) {
                   )}
                 </span>
               </span>
-              <span className="shrink-0 text-txt-muted">
+              <span className="min-w-0 break-words text-txt-muted sm:shrink-0">
                 {it.kind === "prompt" ? "Prompt" : "Search"}
                 {it.domain ? ` · ${it.domain}` : ""}
               </span>

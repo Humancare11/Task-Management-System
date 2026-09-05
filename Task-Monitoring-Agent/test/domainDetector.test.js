@@ -7,6 +7,8 @@ const {
   normalizeHost,
   normalizeDomain,
   registrableDomainFromHost,
+  queryAddressBarValues,
+  _resetQueryCache,
 } = require("../src/monitoring/domainDetector");
 const { classifyTarget } = require("../src/monitoring/contentCapture");
 
@@ -107,4 +109,112 @@ test("integration: arbitrary sites with a search field are captured with the rig
 test("integration: a non-search field on an arbitrary site is not captured", () => {
   assert.equal(classifyUrl("https://example.com/signup", editField({ name: "Email" })), null);
   assert.equal(classifyUrl("https://mail.google.com/mail/u/0", promptField()), null); // Document, not a prompt site
+});
+
+// --- queryAddressBarValues: cache + in-flight de-dupe ---------------------
+// The underlying query spawns powershell.exe and walks the whole foreground
+// window's accessibility tree — expensive, and called independently by the
+// activity tracker AND content capture on their own timers. These tests use
+// the `deps.run` / `deps.now` test seam so no real process is spawned.
+
+test.afterEach(() => _resetQueryCache());
+
+const CHROME = { applicationName: "Google Chrome" };
+
+test("queryAddressBarValues: a second call within the TTL reuses the cached result, no second run", async () => {
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return Promise.resolve(["https://youtube.com/results?search_query=x"]);
+  };
+  let now = 1000;
+  const deps = { run, now: () => now };
+
+  const a = await queryAddressBarValues(CHROME, deps);
+  now += 500; // well inside the 2000ms TTL
+  const b = await queryAddressBarValues(CHROME, deps);
+
+  assert.deepEqual(a, ["https://youtube.com/results?search_query=x"]);
+  assert.deepEqual(b, a);
+  assert.equal(calls, 1, "second call must reuse the cache, not re-run the query");
+});
+
+test("queryAddressBarValues: a call after the TTL expires re-runs the query", async () => {
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return Promise.resolve([`value-${calls}`]);
+  };
+  let now = 1000;
+  const deps = { run, now: () => now };
+
+  await queryAddressBarValues(CHROME, deps);
+  now += 2500; // past the 2000ms TTL
+  await queryAddressBarValues(CHROME, deps);
+
+  assert.equal(calls, 2, "an expired cache entry must trigger a fresh query");
+});
+
+test("queryAddressBarValues: switching foreground app invalidates the cache even within the TTL", async () => {
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return Promise.resolve([`value-${calls}`]);
+  };
+  const deps = { run, now: () => 1000 };
+
+  await queryAddressBarValues(CHROME, deps);
+  await queryAddressBarValues({ applicationName: "Microsoft Edge" }, deps);
+
+  assert.equal(calls, 2, "a different foreground app must not reuse another app's cached value");
+});
+
+test("queryAddressBarValues: two concurrent callers share one in-flight query (no duplicate spawn)", async () => {
+  let calls = 0;
+  let resolveRun;
+  const run = () => {
+    calls += 1;
+    return new Promise((resolve) => {
+      resolveRun = resolve;
+    });
+  };
+  const deps = { run, now: () => 1000 };
+
+  const p1 = queryAddressBarValues(CHROME, deps);
+  const p2 = queryAddressBarValues(CHROME, deps); // arrives while p1 is still pending
+  resolveRun(["https://amazon.com/s?k=x"]);
+  const [a, b] = await Promise.all([p1, p2]);
+
+  assert.equal(calls, 1, "a concurrent second caller must not spawn a second query");
+  assert.deepEqual(a, ["https://amazon.com/s?k=x"]);
+  assert.deepEqual(b, a);
+});
+
+test("queryAddressBarValues: a failed query is not cached and does not poison the next call", async () => {
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return calls === 1 ? Promise.resolve(null) : Promise.resolve(["https://chatgpt.com/c/1"]);
+  };
+  const deps = { run, now: () => 1000 };
+
+  const a = await queryAddressBarValues(CHROME, deps);
+  const b = await queryAddressBarValues(CHROME, deps); // immediately after, still same "now"
+
+  assert.equal(a, null);
+  assert.deepEqual(b, ["https://chatgpt.com/c/1"]);
+  assert.equal(calls, 2, "a null/failed result must not be cached");
+});
+
+test("queryAddressBarValues: unsupported / missing foreground app never invokes run()", async () => {
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return Promise.resolve(["https://example.com"]);
+  };
+  const deps = { run, now: () => 1000 };
+
+  assert.equal(await queryAddressBarValues(null, deps), null);
+  assert.equal(await queryAddressBarValues({ applicationName: "Notepad" }, deps), null);
+  assert.equal(calls, 0);
 });

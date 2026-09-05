@@ -183,18 +183,8 @@ function encodeCommand(script) {
     return Buffer.from(script, "utf16le").toString("base64");
 }
 
-/**
- * Run the address-bar UI Automation query once and return the raw candidate
- * strings (address-bar Edit control values). Resolves [] / null on any failure.
- * @param {{applicationName?:string}|null} active
- * @returns {Promise<string[]|null>}
- */
-function queryAddressBarValues(active) {
-    if (process.platform !== "win32") return Promise.resolve(null);
-    if (!active || !isSupportedBrowser(active.applicationName)) {
-        return Promise.resolve(null);
-    }
-
+/** Actually run the PowerShell UIA query once. No caching here. */
+function runAddressBarQuery() {
     return new Promise((resolve) => {
         execFile(
             "powershell.exe",
@@ -231,14 +221,89 @@ function queryAddressBarValues(active) {
     });
 }
 
+// This query is expensive (spawns powershell.exe, loads UIAutomationClient,
+// walks the WHOLE foreground window's accessibility tree) and is called
+// independently by BOTH the activity/domain tracker (tracker.js, every
+// activityPollIntervalSeconds) and §5b content capture (contentCaptureRunner.js,
+// every contentPollIntervalSeconds — 4s by default, i.e. far more often). Two
+// callers landing close together — routine given the independent timers — used
+// to mean two full, redundant tree-walks running back to back or concurrently,
+// adding real latency/contention on exactly the complex, deeply-nested pages
+// (ChatGPT, YouTube, Amazon, ...) where this query is already slowest, making it
+// MORE likely to blow past the poll interval or the query's own 10s timeout and
+// return null — which silently skips capture entirely for that tick (see
+// contentCapture.js's `!fg.host` check). A short cache + in-flight de-dupe below
+// removes the redundant spawns without changing the query itself:
+//   - in-flight de-dupe: a second caller arriving while a query is already
+//     running gets the SAME live result, never a second concurrent spawn.
+//   - short TTL cache: a caller arriving just after a successful query reuses
+//     that result instead of re-querying from scratch.
+// The TTL is deliberately short (well under either poll interval) so a real
+// tab/site switch is reflected within a couple of seconds — this trades a small,
+// bounded staleness window for materially fewer PowerShell spawns; it does not
+// change what is captured, only how often the address bar is actually re-read.
+const QUERY_CACHE_MS = 2000;
+let _pending = null;
+let _cache = { at: 0, values: null, appName: null };
+
+/**
+ * Run the address-bar UI Automation query, cached/de-duplicated as described
+ * above. Resolves [] / null on any failure. Resolves null immediately (no
+ * process spawn) when not on Windows or the foreground app isn't a supported
+ * browser.
+ * @param {{applicationName?:string}|null} active
+ * @param {{run?:Function, now?:Function}} [deps]  test seam only
+ * @returns {Promise<string[]|null>}
+ */
+function queryAddressBarValues(active, deps = {}) {
+    const run = deps.run || runAddressBarQuery;
+    const now = deps.now || Date.now;
+    if (!deps.run && process.platform !== "win32") return Promise.resolve(null);
+    if (!active || !isSupportedBrowser(active.applicationName)) {
+        return Promise.resolve(null);
+    }
+
+    const t = now();
+    if (
+        _cache.values &&
+        _cache.appName === active.applicationName &&
+        t - _cache.at < QUERY_CACHE_MS
+    ) {
+        return Promise.resolve(_cache.values);
+    }
+    if (_pending) return _pending;
+
+    _pending = run().then(
+        (values) => {
+            _pending = null;
+            if (Array.isArray(values)) {
+                _cache = { at: now(), values, appName: active.applicationName };
+            }
+            return values;
+        },
+        () => {
+            _pending = null;
+            return null;
+        },
+    );
+    return _pending;
+}
+
+/** Test seam only — clears the module-level query cache/in-flight state. */
+function _resetQueryCache() {
+    _pending = null;
+    _cache = { at: 0, values: null, appName: null };
+}
+
 /**
  * Determine the active website/domain (registrable) for a supported browser.
  * Unchanged contract — the activity/events pipeline depends on this.
  * @param {{applicationName?:string}|null} active
+ * @param {{run?:Function, now?:Function}} [deps]  test seam only
  * @returns {Promise<string|null>}
  */
-async function getActiveDomain(active) {
-    const values = await queryAddressBarValues(active);
+async function getActiveDomain(active, deps) {
+    const values = await queryAddressBarValues(active, deps);
     if (!Array.isArray(values)) return null;
     for (const value of values) {
         const domain = normalizeDomain(value);
@@ -253,10 +318,11 @@ async function getActiveDomain(active) {
  * per-site attribution (e.g. "gemini.google.com" is not collapsed to
  * "google.com").
  * @param {{applicationName?:string}|null} active
+ * @param {{run?:Function, now?:Function}} [deps]  test seam only
  * @returns {Promise<{host:string, registrableDomain:string}|null>}
  */
-async function getActiveHostInfo(active) {
-    const values = await queryAddressBarValues(active);
+async function getActiveHostInfo(active, deps) {
+    const values = await queryAddressBarValues(active, deps);
     if (!Array.isArray(values)) return null;
     for (const value of values) {
         const host = normalizeHost(value);
@@ -275,4 +341,6 @@ module.exports = {
     normalizeHost,
     normalizeDomain,
     registrableDomainFromHost,
+    queryAddressBarValues,
+    _resetQueryCache,
 };
