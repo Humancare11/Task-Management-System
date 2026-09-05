@@ -373,7 +373,7 @@ async function readContent({ organizationId, viewer, targetUserId, from, to, ip,
       user_id: targetUserId,
       captured_at: { [Op.gte]: fromDate, [Op.lte]: toDate },
     },
-    order: [["captured_at", "ASC"]],
+    order: [["captured_at", "DESC"]], // newest first — matches the dashboard's display order
     raw: true,
   });
 

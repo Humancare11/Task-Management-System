@@ -269,13 +269,16 @@ function AppGroup({ group, total }) {
 function ActivityLogPanel({ rows }) {
   const [expanded, setExpanded] = useState(false);
   const scrollRef = useRef(null);
-  // Chronological (oldest→newest). When truncated, keep the MOST RECENT slice
-  // visible and let "See More" reveal earlier history.
-  const shown = expanded ? rows : rows.slice(-LOG_INITIAL);
+  // Newest→oldest (rows arrive pre-sorted this way from buildActivityLog).
+  // When truncated, keep the MOST RECENT slice visible — that's simply the
+  // first LOG_INITIAL rows now — and let "See More" reveal earlier history
+  // further down the list.
+  const shown = expanded ? rows : rows.slice(0, LOG_INITIAL);
 
-  // Land on the newest entry when the day's data (re)loads.
+  // Land on the newest entry (now at the top) when the day's data (re)loads,
+  // so a freshly captured event is visible immediately without scrolling.
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [rows]);
 
   return (

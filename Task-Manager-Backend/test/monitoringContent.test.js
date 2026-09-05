@@ -357,6 +357,30 @@ test("readContent decrypts on the fly and flags undecryptable rows", async () =>
   });
 });
 
+test("readContent queries newest-first (captured_at DESC) so the dashboard doesn't have to re-sort", async () => {
+  let seenOrder = null;
+  const res = await mc.readContent({
+    organizationId: 9,
+    viewer: { id: 1, role: "owner" },
+    targetUserId: 5,
+    from: "2026-09-01",
+    to: "2026-09-03",
+    models: {
+      MonitoringContentGrant: { findAll: async () => [] },
+      MonitoringContentAccessLog: { create: async (r) => ({ ...r, update: async () => {} }) },
+      MonitoringContentEvent: {
+        findAll: async (opts) => {
+          seenOrder = opts.order;
+          return [];
+        },
+      },
+    },
+    deps: { gateApproved: true },
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(seenOrder, [["captured_at", "DESC"]]);
+});
+
 // ---------------------------------------------------------------------------
 // Safeguard 4 — retention deletes ONLY expired
 // ---------------------------------------------------------------------------

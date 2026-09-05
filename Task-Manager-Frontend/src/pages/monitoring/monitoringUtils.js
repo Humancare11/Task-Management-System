@@ -417,7 +417,8 @@ export function buildActivityLog(device) {
     });
   }
 
-  return rows.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+  // Newest first — the dashboard shows the most recent activity at the top.
+  return rows.sort((a, b) => b.startMs - a.startMs || b.endMs - a.endMs);
 }
 
 // Collapsed view of a list of groups/rows: the top `limit` by duration PLUS the
