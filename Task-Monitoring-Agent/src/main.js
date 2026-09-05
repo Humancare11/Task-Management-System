@@ -54,6 +54,7 @@ const {
 const contentCaptureRunner = require("./monitoring/contentCaptureRunner");
 const { decideContentAction } = require("./monitoring/contentConsentDecision");
 const liveScreenController = require("./monitoring/liveScreen/liveScreenController");
+const screenshotController = require("./monitoring/screenshot/screenshotController");
 const { postConsent } = require("./api/contentClient");
 const {
     loadSecureConfig,
@@ -220,6 +221,10 @@ function startMonitoring(config) {
         if (kind === "ok") {
             applyContentSignal(config, result && result.contentCapture);
             applyLiveScreenSignal(config, result && result.liveScreen);
+            // Screenshot is a separate feature but shares Live Screen's org
+            // gate, legal gate, and one-time consent signal — no heartbeat
+            // shape change needed.
+            screenshotController.applyScreenshotSignal(config, result && result.liveScreen);
         }
     });
     monitoring = startActivityTracking(config);
@@ -390,6 +395,11 @@ async function stopMonitoring() {
     // End any live-screen session immediately and stop the poll loop.
     try {
         liveScreenController.shutdown();
+    } catch {
+        /* best effort */
+    }
+    try {
+        screenshotController.shutdown();
     } catch {
         /* best effort */
     }

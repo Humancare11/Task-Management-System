@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';" />
+    <title>Screenshot taken</title>
+    <style>
+        html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+        .bar {
+            display: flex; align-items: center; gap: 10px;
+            height: 100%; box-sizing: border-box; padding: 0 12px;
+            border-radius: 10px;
+            background: #b45309; color: #fff;
+            font: 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            box-shadow: 0 4px 16px rgba(0,0,0,.35);
+        }
+        .dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; flex: 0 0 auto; }
+        .msg { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <span class="dot"></span>
+        <span class="msg" id="msg">A screenshot of your screen was just taken.</span>
+    </div>
+    <script>
+        (function () {
+            window.screenshotNotice.onInfo(({ viewerName }) => {
+                document.getElementById("msg").textContent =
+                    "A screenshot of your screen was just taken by " + (viewerName || "an authorized viewer") + ".";
+            });
+        })();
+    </script>
+</body>
+</html>

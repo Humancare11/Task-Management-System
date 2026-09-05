@@ -14,6 +14,7 @@ import {
   Clock,
   AlertTriangle,
   ScrollText,
+  Camera,
 } from "lucide-react";
 import AppLayout from "../../components/layout/AppLayout.jsx";
 import PageHeader from "../../components/ui/PageHeader.jsx";
@@ -25,6 +26,7 @@ import ErrorState from "../../components/common/ErrorState.jsx";
 import Spinner from "../../components/common/Spinner.jsx";
 import MonitoringTimeline from "./MonitoringTimeline.jsx";
 import LiveScreenViewer from "./LiveScreenViewer.jsx";
+import ScreenshotCapture from "./ScreenshotCapture.jsx";
 import { getMonitoringDay, getMonitoringContent } from "../../api/monitoring.js";
 import {
   employeeName,
@@ -84,6 +86,35 @@ function LiveScreenTile({ status, onOpen }) {
         }`}
       >
         {canView ? "View live screen" : `Unavailable · ${status?.label || "Offline"}`}
+      </button>
+    </div>
+  );
+}
+
+// Screenshot tile — a SEPARATE control from Live Screen, not nested inside it.
+// Requests a single still picture of the employee's screen. It has no WebRTC
+// dependency (no peer connection at all), so it works even when Live Screen's
+// video cannot connect; it still needs the employee's agent online (same as
+// Live Screen's initial request) to receive the capture directive at all.
+function ScreenshotTile({ status, onOpen }) {
+  const canCapture = Boolean(status?.live);
+  return (
+    <div className="flex flex-col rounded-xl border border-hair bg-surface-1 p-4">
+      <div className="flex items-center gap-2 text-txt-muted">
+        <Camera size={15} />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em]">Screenshot</span>
+      </div>
+      <button
+        type="button"
+        disabled={!canCapture}
+        onClick={onOpen}
+        className={`mt-1.5 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-3 text-center text-[11px] transition-colors ${
+          canCapture
+            ? "border-accentblue/40 bg-accentblue/10 font-semibold text-accentblue hover:bg-accentblue/20"
+            : "border-hair bg-surface-2/60 text-txt-muted"
+        }`}
+      >
+        {canCapture ? "Take screenshot" : `Unavailable · ${status?.label || "Offline"}`}
       </button>
     </div>
   );
@@ -314,6 +345,7 @@ function DeviceSection({ device, overlapNote, userId, employeeName }) {
   const live = deviceLiveStatus(device);
   const [showAllApps, setShowAllApps] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [screenshotOpen, setScreenshotOpen] = useState(false);
 
   // Unified Applications & Websites + chronological logs — both derived purely
   // from this device's derived sessions/intervals (no hardcoded list).
@@ -387,6 +419,7 @@ function DeviceSection({ device, overlapNote, userId, employeeName }) {
           />
         )}
         <LiveScreenTile status={live} onOpen={() => setViewerOpen(true)} />
+        <ScreenshotTile status={live} onOpen={() => setScreenshotOpen(true)} />
       </div>
 
       <LiveScreenViewer
@@ -394,6 +427,12 @@ function DeviceSection({ device, overlapNote, userId, employeeName }) {
         targetUserId={userId}
         employeeName={employeeName}
         onClose={() => setViewerOpen(false)}
+      />
+      <ScreenshotCapture
+        open={screenshotOpen}
+        targetUserId={userId}
+        employeeName={employeeName}
+        onClose={() => setScreenshotOpen(false)}
       />
 
       {overlapNote && (

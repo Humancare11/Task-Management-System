@@ -32,6 +32,7 @@ app.use(cors());
 const ROUTE_SPECIFIC_PARSER_PATHS = new Set([
   "/api/monitoring/agent/events",
   "/api/monitoring/agent/content",
+  "/api/monitoring/agent/screenshot/upload",
 ]);
 const defaultJsonParser = express.json();
 app.use((req, res, next) => {

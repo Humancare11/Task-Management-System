@@ -33,6 +33,7 @@ const MonitoringContentEvent = require("./MonitoringContentEvent");
 const MonitoringContentGrant = require("./MonitoringContentGrant");
 const MonitoringContentAccessLog = require("./MonitoringContentAccessLog");
 const MonitoringLiveScreenSession = require("./MonitoringLiveScreenSession");
+const MonitoringScreenshotRequest = require("./MonitoringScreenshotRequest");
 
 // User ↔ AuthIdentity
 User.hasMany(AuthIdentity, {
@@ -756,6 +757,14 @@ MonitoringLiveScreenSession.belongsTo(User, { foreignKey: "viewer_user_id", as: 
 MonitoringLiveScreenSession.belongsTo(User, { foreignKey: "target_user_id", as: "targetUser" });
 MonitoringLiveScreenSession.belongsTo(MonitoringAgent, { foreignKey: "agent_id", as: "agent" });
 
+// MonitoringScreenshotRequest — audit metadata only, separate feature from
+// Live Screen. No image data column exists on this model or its table.
+Organization.hasMany(MonitoringScreenshotRequest, { foreignKey: "organization_id", as: "monitoringScreenshotRequests" });
+MonitoringScreenshotRequest.belongsTo(Organization, { foreignKey: "organization_id", as: "organization" });
+MonitoringScreenshotRequest.belongsTo(User, { foreignKey: "viewer_user_id", as: "viewer" });
+MonitoringScreenshotRequest.belongsTo(User, { foreignKey: "target_user_id", as: "targetUser" });
+MonitoringScreenshotRequest.belongsTo(MonitoringAgent, { foreignKey: "agent_id", as: "agent" });
+
 module.exports = {
   User,
   Organization,
@@ -790,4 +799,5 @@ module.exports = {
   MonitoringContentGrant,
   MonitoringContentAccessLog,
   MonitoringLiveScreenSession,
+  MonitoringScreenshotRequest,
 };

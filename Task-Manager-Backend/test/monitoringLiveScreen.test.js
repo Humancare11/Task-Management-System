@@ -29,7 +29,7 @@ test("the legal gate is open (design approved 2026-09-04)", () => {
 });
 
 test("consent doc: one-time setup notice covering the mandatory safeguards", () => {
-  assert.equal(consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION, "2026-09-05.ls-v3");
+  assert.equal(consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION, "2026-09-05.ls-v4");
   assert.equal(
     gate.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
     consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
@@ -37,10 +37,9 @@ test("consent doc: one-time setup notice covering the mandatory safeguards", () 
   const t = consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_TEXT.toLowerCase();
   for (const phrase of [
     "once", // taken once at setup
-    "banner", // mandatory on-screen indicator
-    "stop", // employee stop control
+    "banner", // mandatory on-screen indicator for Live View
+    "stop", // employee stop control for Live View
     "not recorded", // no continuous recording
-    "peer-to-peer",
     "decline",
     "withdraw",
   ]) {
@@ -48,7 +47,7 @@ test("consent doc: one-time setup notice covering the mandatory safeguards", () 
   }
 });
 
-test("consent doc v3: accurately discloses the viewer's screenshot capability", () => {
+test("consent doc v4: discloses the viewer's screenshot-during-a-session capability", () => {
   const t = consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_TEXT.toLowerCase();
   // v2 promised screenshots are "not saved ... anywhere"; that must be gone.
   assert.ok(
@@ -56,6 +55,17 @@ test("consent doc v3: accurately discloses the viewer's screenshot capability", 
     "the superseded blanket no-screenshots promise must not remain",
   );
   for (const phrase of ["screenshot", "still image", "own computer", "own device"]) {
+    assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
+  }
+});
+
+test("consent doc v4: discloses STANDALONE one-time screenshot capture (no live session needed)", () => {
+  const t = consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_TEXT.toLowerCase();
+  for (const phrase of [
+    "does not", // "does NOT require a Live View session to be running"
+    "on its own", // requested / taken "on its own"
+    "brief on-screen notice", // the indication for a bannerless one-shot capture
+  ]) {
     assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
   }
 });

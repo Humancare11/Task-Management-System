@@ -11,8 +11,10 @@ const {
   MonitoringContentGrant,
   MonitoringConsent,
   MonitoringLiveScreenSession,
+  MonitoringScreenshotRequest,
 } = require("./models");
 const liveScreen = require("./services/monitoringLiveScreen");
+const monitoringScreenshot = require("./services/monitoringScreenshot");
 const {
   LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
 } = require("./config/liveScreenConsentDocument");
@@ -95,9 +97,11 @@ function initSocket(server) {
     });
 
     wireLiveScreenSocket(socket);
+    wireScreenshotSocket(socket);
   });
 
   wireLiveScreenRelay();
+  wireScreenshotRelay();
   reportLiveScreenReadiness();
 
   return io;
@@ -324,6 +328,157 @@ function wireLiveScreenSocket(socket) {
     // "connection" above cancels this if they do. The WebRTC media itself is
     // a separate P2P path and is untouched by this socket dropping.
     liveScreen.scheduleViewerDisconnect(user.id, "viewer_disconnected");
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Screenshot — a SEPARATE feature from Live Screen. No WebRTC, no persistent
+// session: one request, one image, delivered once. The image bytes DO transit
+// this server's memory (see services/monitoringScreenshot.js for why that is
+// unavoidable here), but only as a same-tick event payload — this relay never
+// assigns them to a variable that outlives the emit, never logs them, and
+// never writes them to the database. Only request metadata is persisted.
+// ---------------------------------------------------------------------------
+
+let screenshotRelayWired = false;
+
+function wireScreenshotRelay() {
+  if (screenshotRelayWired) return;
+  screenshotRelayWired = true;
+
+  monitoringScreenshot.emitter.on("request", async (evt) => {
+    const r = evt.request;
+    const room = r.viewerUserId ? `user:${r.viewerUserId}` : null;
+
+    try {
+      if (evt.type === "delivered") {
+        await MonitoringScreenshotRequest.update(
+          { status: "delivered", delivered_at: r.deliveredAt || new Date() },
+          { where: { id: r.id } },
+        );
+      } else if (evt.type === "failed") {
+        await MonitoringScreenshotRequest.update(
+          { status: r.status, error_reason: evt.code || null },
+          { where: { id: r.id } },
+        );
+      }
+    } catch (err) {
+      console.error("screenshot audit update failed:", err.message);
+    }
+
+    if (!room || !io) return;
+    if (evt.type === "delivered") {
+      // Same-tick pass-through only: evt.imageBuffer is read here and handed
+      // straight to socket.io's emit, never assigned anywhere that persists.
+      io.to(room).emit("screenshot:ready", {
+        requestId: r.id,
+        image: evt.imageBuffer.toString("base64"),
+        mimeType: evt.mimeType,
+      });
+    } else if (evt.type === "failed") {
+      io.to(room).emit("screenshot:error", { requestId: r.id, code: evt.code });
+    }
+  });
+}
+
+function wireScreenshotSocket(socket) {
+  const user = socket.user; // { id, organization_id, role } from verified JWT
+
+  socket.on("screenshot:request", async ({ targetUserId } = {}, ack) => {
+    const reply = typeof ack === "function" ? ack : () => {};
+    const target = Number(targetUserId);
+    try {
+      const [orgSettings, grants, agent, consent] = await Promise.all([
+        MonitoringOrgSetting.findOne({
+          where: { organization_id: user.organization_id },
+          attributes: ["organization_id", "live_screen_enabled"],
+          raw: true,
+        }),
+        MonitoringContentGrant.findAll({
+          where: { organization_id: user.organization_id, grantee_user_id: user.id },
+          raw: true,
+        }),
+        Number.isInteger(target) && target > 0
+          ? MonitoringAgent.findOne({
+              where: {
+                organization_id: user.organization_id,
+                user_id: target,
+                status: "active",
+              },
+              order: [["last_seen_at", "DESC"]],
+            })
+          : null,
+        Number.isInteger(target) && target > 0
+          ? MonitoringConsent.findOne({
+              where: {
+                user_id: target,
+                document_version: LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
+              },
+              raw: true,
+            })
+          : null,
+      ]);
+
+      const decision = monitoringScreenshot.prepareViewerRequest({
+        viewer: user,
+        organizationId: user.organization_id,
+        targetUserId: target,
+        orgSettings,
+        grants,
+        agent,
+        consent,
+      });
+      if (!decision.ok) return reply({ ok: false, code: decision.code });
+
+      const id = crypto.randomUUID();
+      await MonitoringScreenshotRequest.create({
+        id,
+        organization_id: user.organization_id,
+        viewer_user_id: user.id,
+        target_user_id: target,
+        agent_id: agent.id,
+        status: "requested",
+        access_via: decision.accessVia,
+        viewer_ip:
+          (socket.handshake.headers["x-forwarded-for"] || "")
+            .split(",")[0]
+            .trim() ||
+          socket.handshake.address ||
+          null,
+        requested_at: new Date(),
+      });
+
+      monitoringScreenshot.createRequest({
+        id,
+        organizationId: user.organization_id,
+        viewer: user,
+        targetUserId: target,
+        agentId: agent.id,
+        accessVia: decision.accessVia,
+      });
+
+      reply({ ok: true, requestId: id });
+    } catch (err) {
+      console.error("screenshot:request FAILED", {
+        viewer: user && user.id,
+        org: user && user.organization_id,
+        target,
+        name: err && err.name,
+        db_code: err && err.original && err.original.code,
+        sql: err && err.sql,
+        message: err && err.message,
+      });
+      if (liveScreen.isSchemaError(err)) {
+        return reply({
+          ok: false,
+          code: "not_ready",
+          detail:
+            "Screenshot database migrations have not been applied on this server. " +
+            "Run: npx sequelize-cli db:migrate --env production",
+        });
+      }
+      reply({ ok: false, code: "server_error" });
+    }
   });
 }
 

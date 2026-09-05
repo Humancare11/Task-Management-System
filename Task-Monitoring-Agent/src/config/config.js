@@ -71,6 +71,11 @@ const DEFAULT_LIVE_SCREEN_MAX_SESSION_SECONDS = 0;
 // the server usually reports the failure first.
 const DEFAULT_LIVE_SCREEN_CONNECT_TIMEOUT_SECONDS = 45;
 
+// Screenshot (opt-in, gated) — a separate feature from Live Screen. One poll
+// speed is enough: there is no "active session" to speed up for, just a
+// pending request that should be noticed quickly.
+const DEFAULT_SCREENSHOT_POLL_INTERVAL_SECONDS = 5;
+
 function positiveNumberOr(value, fallback) {
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -212,6 +217,12 @@ function buildConfig(fallback = {}) {
         liveScreenConnectTimeoutSeconds: positiveNumberOr(
             layered("LIVE_SCREEN_CONNECT_TIMEOUT_SECONDS", "liveScreenConnectTimeoutSeconds"),
             DEFAULT_LIVE_SCREEN_CONNECT_TIMEOUT_SECONDS,
+        ),
+
+        // --- Screenshot (gated; separate feature from Live Screen) ---
+        screenshotPollIntervalSeconds: positiveNumberOr(
+            layered("SCREENSHOT_POLL_INTERVAL_SECONDS", "screenshotPollIntervalSeconds"),
+            DEFAULT_SCREENSHOT_POLL_INTERVAL_SECONDS,
         ),
     };
 }

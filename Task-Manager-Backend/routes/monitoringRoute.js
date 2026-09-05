@@ -22,6 +22,8 @@ const {
   getAgentLiveScreen,
   submitAgentLiveScreenSignal,
   getLiveScreenDiagnostics,
+  getAgentScreenshot,
+  submitAgentScreenshotCapture,
 } = require("../controllers/monitoringController");
 
 // The raw-event ingest can post batches larger than the global 100kb JSON
@@ -35,6 +37,12 @@ const eventsJsonParser = express.json({
 // skip in index.js, same pattern as the events ingest.
 const contentJsonParser = express.json({
   limit: process.env.MONITORING_CONTENT_BODY_LIMIT || "1mb",
+});
+
+// Screenshot upload — one base64-encoded PNG per request. Own parser (base64
+// adds ~33% size) + a global skip in index.js, same pattern as above.
+const screenshotJsonParser = express.json({
+  limit: process.env.MONITORING_SCREENSHOT_BODY_LIMIT || "20mb",
 });
 
 // Phase 5: the token-based self-enrollment flow (POST /enrollments +
@@ -101,6 +109,14 @@ router.get(
   requireRole("owner", "admin"),
   getLiveScreenDiagnostics
 );
+
+// Screenshot — a SEPARATE feature from Live Screen (agent signaling, no JWT;
+// agent_uuid + agent_secret in body). No WebRTC involved at all — the agent
+// captures one still frame directly and uploads it once. 501 while the legal
+// gate is closed. The captured image is relayed to the viewer and never
+// persisted anywhere on this server (see services/monitoringScreenshot.js).
+router.post("/agent/screenshot", getAgentScreenshot);
+router.post("/agent/screenshot/upload", screenshotJsonParser, submitAgentScreenshotCapture);
 
 // DEPRECATED (Phase 5) — read-only historical access to monitoring_activities.
 // The dashboard reads /summary + /daily. Owner/admin only. Responses carry

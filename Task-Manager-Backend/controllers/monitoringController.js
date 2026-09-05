@@ -43,6 +43,7 @@ const {
   LIVE_SCREEN_CONSENT_DOCUMENT_TEXT,
 } = require("../config/liveScreenConsentDocument");
 const liveScreen = require("../services/monitoringLiveScreen");
+const monitoringScreenshot = require("../services/monitoringScreenshot");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -1542,6 +1543,93 @@ exports.submitAgentLiveScreenSignal = async (req, res) => {
     });
   } catch (error) {
     console.error("submitAgentLiveScreenSignal error:", error);
+    return res.status(500).json({ message: "Server error." });
+  }
+};
+
+// ===========================================================================
+// Screenshot — a SEPARATE feature from Live Screen. No WebRTC anywhere: the
+// agent captures one still frame directly (Electron desktopCapturer) and
+// uploads it once; this server relays it to the viewer and never persists it
+// (see services/monitoringScreenshot.js). Gated by the SAME legal flag as
+// Live Screen — both are "someone may see this employee's screen".
+// ===========================================================================
+
+// POST /api/monitoring/agent/screenshot
+// Body: { agent_uuid, agent_secret }. Returns:
+//   { action: "none" } | { action: "capture", request_id }
+exports.getAgentScreenshot = async (req, res) => {
+  try {
+    if (!LIVE_SCREEN_LEGALLY_APPROVED) {
+      return res.status(501).json({ message: "Screenshot is not enabled." });
+    }
+    const auth = await authenticateAgentFromBody(req.body);
+    if (auth.error) {
+      return res.status(auth.error.status).json({ message: auth.error.message });
+    }
+    return res.status(200).json(monitoringScreenshot.agentDirective(auth.agent.id));
+  } catch (error) {
+    console.error("getAgentScreenshot error:", error);
+    return res.status(500).json({ message: "Server error." });
+  }
+};
+
+// POST /api/monitoring/agent/screenshot/upload
+// Body: { agent_uuid, agent_secret, request_id, image_base64 }
+//    or: { agent_uuid, agent_secret, request_id, error: "<short reason>" }
+// The decoded image is handed to the in-memory service for a ONE-TIME relay
+// to the viewer (see monitoringScreenshot.submitCapture) and is never
+// assigned to any variable here beyond that single call — never logged,
+// never written to a model, a file, or anywhere else. Do not add logging of
+// req.body in this handler.
+exports.submitAgentScreenshotCapture = async (req, res) => {
+  try {
+    if (!LIVE_SCREEN_LEGALLY_APPROVED) {
+      return res.status(501).json({ message: "Screenshot is not enabled." });
+    }
+    const auth = await authenticateAgentFromBody(req.body);
+    if (auth.error) {
+      return res.status(auth.error.status).json({ message: auth.error.message });
+    }
+
+    const { request_id, image_base64, error: captureError } = req.body || {};
+    if (typeof request_id !== "string" || !request_id) {
+      return res.status(400).json({ message: "request_id is required." });
+    }
+
+    if (captureError) {
+      const r = monitoringScreenshot.submitCaptureError(
+        auth.agent.id,
+        request_id,
+        String(captureError).slice(0, 40),
+      );
+      if (!r.ok) return res.status(409).json({ message: r.code || "rejected" });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (typeof image_base64 !== "string" || !image_base64) {
+      return res.status(400).json({ message: "image_base64 is required." });
+    }
+
+    let buffer;
+    try {
+      buffer = Buffer.from(image_base64, "base64");
+    } catch {
+      return res.status(400).json({ message: "image_base64 is not valid base64." });
+    }
+    // A generous but bounded cap — nothing this large should ever be a
+    // legitimate single-screen PNG; refuse rather than relay something huge.
+    if (buffer.length === 0 || buffer.length > 15 * 1024 * 1024) {
+      return res.status(400).json({ message: "image size out of bounds." });
+    }
+
+    const r = monitoringScreenshot.submitCapture(auth.agent.id, request_id, buffer);
+    if (!r.ok) {
+      return res.status(409).json({ message: r.code || "rejected" });
+    }
+    return res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("submitAgentScreenshotCapture error:", error.message);
     return res.status(500).json({ message: "Server error." });
   }
 };
