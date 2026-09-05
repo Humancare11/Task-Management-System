@@ -19,9 +19,17 @@
  * owner or holds an active monitoring_content_grant. Every session is audited
  * (monitoring_live_screen_sessions) and shows the employee an on-screen banner
  * with a Stop button for its whole duration.
+ *
+ * ── v3 (2026-09-05) ─────────────────────────────────────────────────────────
+ * Added the viewer's client-side "Screenshot" capability (a still frame of the
+ * live view the viewer may save to their own computer during a session — see
+ * LiveScreenViewer.jsx; nothing is ever sent to or stored on the server). v2
+ * told employees no screenshots are ever saved anywhere, which this makes
+ * untrue, so the notice is corrected and the version bumped: every employee is
+ * re-prompted once before the feature is truthfully covered for them.
  */
 
-const LIVE_SCREEN_CONSENT_DOCUMENT_VERSION = "2026-09-04.ls-v2";
+const LIVE_SCREEN_CONSENT_DOCUMENT_VERSION = "2026-09-05.ls-v3";
 
 const LIVE_SCREEN_CONSENT_DOCUMENT_TITLE =
   "Notice & Consent — Live View of Your Screen";
@@ -44,22 +52,32 @@ YOU ARE ALWAYS TOLD WHEN IT IS HAPPENING
     time, for any reason, with one click.
 
 WHAT IS AND IS NOT KEPT
-  • The live view is NOT recorded. No video and no screenshots are saved — not
-    on your computer, not on the server, not anywhere.
-  • The connection is peer-to-peer; the picture goes straight to the viewer's
-    browser and is gone the moment the session ends.
-  • The only thing stored is a log entry: who viewed, when, and for how long.
+  • The live view itself is NOT recorded. There is no continuous recording of
+    the session — not on your computer, not on the server, not anywhere.
+  • While a session is active, the authorized viewer CAN capture a single still
+    image ("screenshot") of what is on your screen at that moment and save that
+    one image to their own computer. This is the only way any picture from a
+    session can be kept, it is a deliberate action the viewer takes (not
+    automatic), and it is never sent to or stored on the company's server — it
+    can only end up on the viewer's own device, and only if they save it.
+  • The connection is peer-to-peer; the live picture itself goes straight to
+    the viewer's browser and is gone the moment the session ends, aside from
+    any still image the viewer explicitly saved as described above.
+  • The only thing stored on the server is a log entry: who viewed, when, and
+    for how long.
 
 YOUR CHOICE
   • "I Accept" allows authorized, on-screen-indicated live viewing of your
-    screen for your account.
+    screen for your account, including the viewer's ability to save a still
+    image as described above.
   • "I Decline", or closing this window, means your screen cannot be viewed
     live. Your other monitoring is unaffected, and declining has no other effect
     on setup.
   • You can withdraw this consent at any time by contacting your manager or HR.
 
 By choosing "I Accept" you confirm that you have read this notice and consent to
-authorized, banner-indicated, non-recorded live viewing of your screen as
+authorized, banner-indicated live viewing of your screen — including the
+viewer's ability to save a still image of the screen during a session, as
 described above.`;
 
 module.exports = {

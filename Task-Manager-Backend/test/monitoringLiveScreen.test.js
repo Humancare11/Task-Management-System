@@ -29,7 +29,7 @@ test("the legal gate is open (design approved 2026-09-04)", () => {
 });
 
 test("consent doc: one-time setup notice covering the mandatory safeguards", () => {
-  assert.equal(consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION, "2026-09-04.ls-v2");
+  assert.equal(consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION, "2026-09-05.ls-v3");
   assert.equal(
     gate.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
     consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
@@ -39,11 +39,23 @@ test("consent doc: one-time setup notice covering the mandatory safeguards", () 
     "once", // taken once at setup
     "banner", // mandatory on-screen indicator
     "stop", // employee stop control
-    "not recorded", // no recording
+    "not recorded", // no continuous recording
     "peer-to-peer",
     "decline",
     "withdraw",
   ]) {
+    assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
+  }
+});
+
+test("consent doc v3: accurately discloses the viewer's screenshot capability", () => {
+  const t = consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_TEXT.toLowerCase();
+  // v2 promised screenshots are "not saved ... anywhere"; that must be gone.
+  assert.ok(
+    !t.includes("no video and no screenshots are saved"),
+    "the superseded blanket no-screenshots promise must not remain",
+  );
+  for (const phrase of ["screenshot", "still image", "own computer", "own device"]) {
     assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
   }
 });
