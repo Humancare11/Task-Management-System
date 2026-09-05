@@ -14,16 +14,18 @@
 // single frame. There is no per-session cadence to speed up for: one poll
 // speed is enough, since a capture is immediate once noticed.
 //
-// The employee is never left unaware: a brief on-screen notice appears at the
-// moment of capture (there is nothing ongoing to show a persistent banner
-// for, unlike Live Screen).
+// The employee is told about this capability up front, once, in the setup
+// consent (see config/liveScreenConsentDocument.js on the backend, v5) —
+// there is deliberately no on-screen popup at the moment of each capture. An
+// earlier version showed one, but an always-on-top window landing on the
+// employee's screen every time a screenshot was taken interrupted their work
+// for something instantaneous they had no way to pause or stop anyway. Each
+// capture is still fully accounted for via the server-side audit record
+// (monitoring_screenshot_requests) regardless.
 
-const path = require("path");
-const { BrowserWindow, screen, desktopCapturer } = require("electron");
+const { screen, desktopCapturer } = require("electron");
 const logger = require("../../utils/logger");
 const screenshotClient = require("./screenshotClient");
-
-const NOTICE_DURATION_MS = 4000;
 
 let config = null;
 let pollTimer = null;
@@ -35,64 +37,10 @@ function periodMs() {
     return (config.screenshotPollIntervalSeconds || 5) * 1000;
 }
 
-// --------------------------------------------------------------- notice
-
-function showNotice(viewerName) {
-    try {
-        const primary = screen.getPrimaryDisplay();
-        const width = 460;
-        const height = 52;
-        const win = new BrowserWindow({
-            width,
-            height,
-            x: Math.round(primary.workArea.x + (primary.workArea.width - width) / 2),
-            y: primary.workArea.y + 8,
-            frame: false,
-            transparent: true,
-            resizable: false,
-            movable: false,
-            minimizable: false,
-            maximizable: false,
-            skipTaskbar: true,
-            focusable: false,
-            alwaysOnTop: true,
-            show: false,
-            webPreferences: {
-                preload: path.join(__dirname, "..", "..", "preload-screenshotNotice.js"),
-                contextIsolation: true,
-                nodeIntegration: false,
-            },
-        });
-        win.setAlwaysOnTop(true, "screen-saver");
-        win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-        win.loadFile(path.join(__dirname, "..", "..", "ui", "screenshotNotice.html"));
-        win.once("ready-to-show", () => {
-            win.showInactive();
-            win.webContents.send("ss:info", { viewerName: viewerName || "an authorized viewer" });
-        });
-        const closeTimer = setTimeout(() => {
-            try {
-                if (!win.isDestroyed()) win.destroy();
-            } catch {
-                /* ignore */
-            }
-        }, NOTICE_DURATION_MS);
-        if (closeTimer.unref) closeTimer.unref();
-    } catch (err) {
-        // The notice is a courtesy, not a gate — a failure here must not block
-        // the capture (unlike Live Screen's banner, which IS a hard gate,
-        // because Live Screen is an ongoing session with nothing else telling
-        // the employee it's happening). A single instantaneous screenshot is
-        // still disclosed to the org via the audit trail either way.
-        logger.warn(`Screenshot: notice window failed: ${err.message}`);
-    }
-}
-
 // --------------------------------------------------------------- capture
 
-async function captureAndUpload(requestId, viewerName) {
+async function captureAndUpload(requestId) {
     capturingRequestId = requestId;
-    showNotice(viewerName);
     try {
         const primary = screen.getPrimaryDisplay();
         const scale = primary.scaleFactor || 1;
@@ -146,7 +94,7 @@ async function tick() {
             // Fire-and-forget: don't block the poll loop's own timer on the
             // capture+upload; the capturingRequestId guard above prevents a
             // second tick from starting a concurrent capture in the meantime.
-            captureAndUpload(d.request_id, d.viewer_name).catch(() => {});
+            captureAndUpload(d.request_id).catch(() => {});
         }
     } catch (err) {
         logger.warn(`Screenshot poll error: ${err.message}`);

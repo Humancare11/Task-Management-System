@@ -41,9 +41,22 @@
  * of capture. This is a materially different mechanism from v3's "screenshot
  * during a live session," so the notice is rewritten to describe both
  * distinctly and the version is bumped.
+ *
+ * ── v5 (2026-09-05) ─────────────────────────────────────────────────────────
+ * Removed the per-capture on-screen notice v4 promised for a standalone
+ * Screenshot. It popped an always-on-top window over whatever the employee
+ * was doing every single time a screenshot was taken, which interrupted their
+ * work for something instantaneous they had no way to pause or stop anyway.
+ * A Screenshot is now disclosed up front, here, once — like every other
+ * discrete, already-consented capture this agent performs (activity/domain
+ * tracking, §5b content capture) — and is still fully accounted for via the
+ * per-request audit record. LIVE VIEW is deliberately NOT changed: it is an
+ * open-ended, continuous state, so the on-screen banner + Stop button remain
+ * the only way an employee can tell, at any given moment, whether their
+ * screen is currently being watched — removing that would make it covert.
  */
 
-const LIVE_SCREEN_CONSENT_DOCUMENT_VERSION = "2026-09-05.ls-v4";
+const LIVE_SCREEN_CONSENT_DOCUMENT_VERSION = "2026-09-05.ls-v5";
 
 const LIVE_SCREEN_CONSENT_DOCUMENT_TITLE =
   "Notice & Consent — Someone Seeing Your Screen (Live View & Screenshots)";
@@ -72,9 +85,14 @@ YOU ARE ALWAYS TOLD WHEN IT IS HAPPENING
     that banner is not on your screen, no one is viewing it live. The banner
     has a "Stop" button; you can end any live session yourself, at any time,
     for any reason, with one click.
-  • SCREENSHOT: because it is instantaneous, there is nothing to "stop" — but
-    you will see a brief on-screen notice at the moment it happens, naming who
-    requested it.
+  • SCREENSHOT: because it is instantaneous, there is nothing to "stop," and
+    popping up a notice on your screen every single time one happened would
+    only interrupt your work without giving you any way to act on it. So you
+    do not get a separate notice at the moment of each individual screenshot
+    — you are being told about it right now, once, instead. Every screenshot
+    is still limited to an authorized person acting for an authorized reason,
+    and every one is written to an audit record — who requested it, when —
+    that your organization can review.
 
 WHAT IS AND IS NOT KEPT
   • A Live View is NOT recorded. There is no continuous recording of the

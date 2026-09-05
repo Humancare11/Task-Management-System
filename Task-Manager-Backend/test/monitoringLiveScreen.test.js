@@ -29,7 +29,7 @@ test("the legal gate is open (design approved 2026-09-04)", () => {
 });
 
 test("consent doc: one-time setup notice covering the mandatory safeguards", () => {
-  assert.equal(consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION, "2026-09-05.ls-v4");
+  assert.equal(consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION, "2026-09-05.ls-v5");
   assert.equal(
     gate.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
     consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_VERSION,
@@ -64,9 +64,26 @@ test("consent doc v4: discloses STANDALONE one-time screenshot capture (no live 
   for (const phrase of [
     "does not", // "does NOT require a Live View session to be running"
     "on its own", // requested / taken "on its own"
-    "brief on-screen notice", // the indication for a bannerless one-shot capture
   ]) {
     assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
+  }
+});
+
+test("consent doc v5: screenshot disclosure is up-front, not a per-capture popup", () => {
+  const t = consentDoc.LIVE_SCREEN_CONSENT_DOCUMENT_TEXT.toLowerCase();
+  // v4 promised a notice popping up at the moment of every capture; that
+  // promise must be gone now that the agent no longer shows it.
+  assert.ok(
+    !t.includes("you will see a brief on-screen notice at the moment it happens"),
+    "the superseded per-capture notice promise must not remain",
+  );
+  for (const phrase of ["separate notice", "audit record", "authorized reason"]) {
+    assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
+  }
+  // Live View's real-time indicator is a different, unaffected guarantee —
+  // this change must not have touched it.
+  for (const phrase of ["banner", "stop"]) {
+    assert.ok(t.includes(phrase), `notice should still mention "${phrase}" for Live View`);
   }
 });
 
