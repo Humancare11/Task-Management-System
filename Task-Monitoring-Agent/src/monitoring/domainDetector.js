@@ -238,20 +238,24 @@ function runAddressBarQuery() {
 //     running gets the SAME live result, never a second concurrent spawn.
 //   - short TTL cache: a caller arriving just after a successful query reuses
 //     that result instead of re-querying from scratch.
-// The TTL is deliberately short (well under either poll interval) so a real
-// tab/site switch is reflected within a couple of seconds — this trades a small,
-// bounded staleness window for materially fewer PowerShell spawns; it does not
-// change what is captured, only how often the address bar is actually re-read.
-const QUERY_CACHE_MS = 2000;
+// A cached value is reused only while BOTH the foreground application name AND
+// the window title are unchanged. The window title changes on every navigation
+// (a different page, a different site, and certainly when crossing onto a
+// blocklisted bank/health/gov site), so the cache can never serve a stale host
+// across a real site change — the blocklist check in contentCapture.js always
+// sees the current site. Within one page (title stable) successive polls reuse
+// the result and spawn nothing. TTL is a backstop for a page that mutates its
+// own title in place.
+const QUERY_CACHE_MS = 5000;
 let _pending = null;
-let _cache = { at: 0, values: null, appName: null };
+let _cache = { at: 0, values: null, appName: null, title: null };
 
 /**
  * Run the address-bar UI Automation query, cached/de-duplicated as described
  * above. Resolves [] / null on any failure. Resolves null immediately (no
  * process spawn) when not on Windows or the foreground app isn't a supported
  * browser.
- * @param {{applicationName?:string}|null} active
+ * @param {{applicationName?:string, windowTitle?:string}|null} active
  * @param {{run?:Function, now?:Function}} [deps]  test seam only
  * @returns {Promise<string[]|null>}
  */
@@ -263,10 +267,12 @@ function queryAddressBarValues(active, deps = {}) {
         return Promise.resolve(null);
     }
 
+    const title = active.windowTitle || "";
     const t = now();
     if (
         _cache.values &&
         _cache.appName === active.applicationName &&
+        _cache.title === title &&
         t - _cache.at < QUERY_CACHE_MS
     ) {
         return Promise.resolve(_cache.values);
@@ -277,7 +283,12 @@ function queryAddressBarValues(active, deps = {}) {
         (values) => {
             _pending = null;
             if (Array.isArray(values)) {
-                _cache = { at: now(), values, appName: active.applicationName };
+                _cache = {
+                    at: now(),
+                    values,
+                    appName: active.applicationName,
+                    title,
+                };
             }
             return values;
         },
@@ -292,7 +303,7 @@ function queryAddressBarValues(active, deps = {}) {
 /** Test seam only — clears the module-level query cache/in-flight state. */
 function _resetQueryCache() {
     _pending = null;
-    _cache = { at: 0, values: null, appName: null };
+    _cache = { at: 0, values: null, appName: null, title: null };
 }
 
 /**

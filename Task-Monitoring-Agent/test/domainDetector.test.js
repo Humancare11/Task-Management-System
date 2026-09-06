@@ -131,7 +131,7 @@ test("queryAddressBarValues: a second call within the TTL reuses the cached resu
   const deps = { run, now: () => now };
 
   const a = await queryAddressBarValues(CHROME, deps);
-  now += 500; // well inside the 2000ms TTL
+  now += 1500; // well inside the 5000ms TTL
   const b = await queryAddressBarValues(CHROME, deps);
 
   assert.deepEqual(a, ["https://youtube.com/results?search_query=x"]);
@@ -149,7 +149,7 @@ test("queryAddressBarValues: a call after the TTL expires re-runs the query", as
   const deps = { run, now: () => now };
 
   await queryAddressBarValues(CHROME, deps);
-  now += 2500; // past the 2000ms TTL
+  now += 6000; // past the 5000ms TTL
   await queryAddressBarValues(CHROME, deps);
 
   assert.equal(calls, 2, "an expired cache entry must trigger a fresh query");
@@ -167,6 +167,20 @@ test("queryAddressBarValues: switching foreground app invalidates the cache even
   await queryAddressBarValues({ applicationName: "Microsoft Edge" }, deps);
 
   assert.equal(calls, 2, "a different foreground app must not reuse another app's cached value");
+});
+
+test("queryAddressBarValues: a window-title change (navigation) invalidates the cache — the blocklist never sees a stale host", async () => {
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return Promise.resolve([`value-${calls}`]);
+  };
+  const deps = { run, now: () => 1000 }; // same instant — TTL is not the trigger here
+
+  await queryAddressBarValues({ applicationName: "Google Chrome", windowTitle: "Cats - YouTube" }, deps);
+  await queryAddressBarValues({ applicationName: "Google Chrome", windowTitle: "Sign in - Chase" }, deps);
+
+  assert.equal(calls, 2, "navigating (title change) must force a fresh address-bar read");
 });
 
 test("queryAddressBarValues: two concurrent callers share one in-flight query (no duplicate spawn)", async () => {

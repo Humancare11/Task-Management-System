@@ -202,6 +202,55 @@ test("reduceQuery: nothing pending -> nothing emitted on clear", () => {
   assert.equal(r.emit, null);
 });
 
+// --- NEW: capture back-to-back searches on the SAME site (the old lossy case) ---
+
+const KEY = "chrome|google.com|search";
+function drive(steps) {
+  let s = { pending: "", targetKey: "" };
+  const emitted = [];
+  for (const text of steps) {
+    const r = reduceQuery(s, { text, targetKey: text === null ? null : KEY });
+    if (r.emit) emitted.push(r.emit);
+    s = r.state;
+  }
+  return { emitted, state: s };
+}
+
+test("reduceQuery: two searches on the same site, box not cleared between them -> BOTH captured", () => {
+  // "cats" typed, sits stable for 2 polls (user submitted, reading results),
+  // then the box is edited to "dogs" and that is submitted (focus leaves).
+  const { emitted } = drive(["ca", "cats", "cats", "cats", "dogs", null]);
+  assert.deepEqual(emitted, ["cats", "dogs"]);
+});
+
+test("reduceQuery: a divergent second query flushes the first even without a stable pause", () => {
+  // "flights" then immediately "hotels" — not a continuation -> "flights" was committed.
+  const { emitted } = drive(["flig", "flights", "hotels", null]);
+  assert.deepEqual(emitted, ["flights", "hotels"]);
+});
+
+test("reduceQuery: refining a query (continuation) within the stable window is ONE query, not two", () => {
+  // "cheap" -> "cheap flights" -> "cheap flights to tokyo", typed straight through.
+  const { emitted } = drive(["cheap", "cheap flights", "cheap flights to tokyo", ""]);
+  assert.deepEqual(emitted, ["cheap flights to tokyo"]);
+});
+
+test("reduceQuery: a value already emitted for this field session is not emitted again on clear", () => {
+  // "cats" stable, then "cats and kittens" (continuation but stable -> "cats" committed),
+  // then the user backspaces to "cats" again, then the box clears.
+  const { emitted } = drive([
+    "cats", "cats", "cats", "cats and kittens", "cats", "",
+  ]);
+  // "cats" once (from the stability trigger); "cats and kittens" never sat long
+  // enough and "cats" on the clear is suppressed by emittedForKey.
+  assert.deepEqual(emitted, ["cats"]);
+});
+
+test("reduceQuery: five rapid distinct searches in a row are all captured", () => {
+  const { emitted } = drive(["a1", "alpha", "beta", "gamma", "delta", "epsilon", null]);
+  assert.deepEqual(emitted, ["alpha", "beta", "gamma", "delta", "epsilon"]);
+});
+
 // --- end-to-end tick loop: search -> agent capture (before it leaves the agent) ---
 
 async function harness(blocklist) {
@@ -293,5 +342,49 @@ test("flow: non-search field is ignored, does not block a later real search", as
     h.emitted.map((e) => [e.domain, e.text]),
     [["duckduckgo.com", "vpn comparison"]],
   );
+  h.stop();
+});
+
+test("flow: TWO searches on google without the box clearing between them -> both captured", async () => {
+  const h = await harness([]);
+  // first search, then it sits in the box while the user reads results
+  await h.set(fg("google.com"), searchInput("laptop reviews"));
+  await h.set(fg("google.com"), searchInput("laptop reviews"));
+  await h.set(fg("google.com"), searchInput("laptop reviews"));
+  // second search typed into the same box
+  await h.set(fg("google.com"), searchInput("mechanical keyboard"));
+  await h.set(fg("google.com"), searchInput("mechanical keyboard"));
+  await h.set(null, null); // user clicks a result / leaves
+  assert.deepEqual(
+    h.emitted.map((e) => e.text),
+    ["laptop reviews", "mechanical keyboard"],
+  );
+  h.stop();
+});
+
+test("flow: a failed host read mid-session does NOT lose the pending query", async () => {
+  const h = await harness([]);
+  await h.set(fg("google.com"), searchInput("annual leave policy"));
+  // address bar unreadable for a few ticks (host null) — still a browser
+  await h.set({ applicationName: "Google Chrome", windowTitle: "…", host: null, registrableDomain: null, isBrowser: true }, searchInput("annual leave policy"));
+  await h.set({ applicationName: "Google Chrome", windowTitle: "…", host: null, registrableDomain: null, isBrowser: true }, null);
+  // host recovers, user has moved to a different search
+  await h.set(fg("bing.com"), searchInput("carry over days"));
+  await h.set(null, null);
+  assert.deepEqual(
+    h.emitted.map((e) => [e.domain, e.text]),
+    [["google.com", "annual leave policy"], ["bing.com", "carry over days"]],
+  );
+  h.stop();
+});
+
+test("flow: a search on a heavy page keeps working even if some ticks can't read the field", async () => {
+  const h = await harness([]);
+  await h.set(fg("news.example.com"), searchInput("election results"));
+  await h.set(fg("news.example.com"), null); // readQueryField miss — hold pending
+  await h.set(fg("news.example.com"), null);
+  await h.set(fg("news.example.com"), searchInput("")); // box cleared on submit
+  await h.set(null, null);
+  assert.deepEqual(h.emitted.map((e) => e.text), ["election results"]);
   h.stop();
 });

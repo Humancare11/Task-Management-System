@@ -48,7 +48,11 @@ const DEFAULT_INPUT_POLL_INTERVAL_SECONDS = 25;
 // §5b content capture (Phase 4). Fully inert unless the SERVER's heartbeat
 // reports content_capture.active === true (legal gate open + org enabled +
 // consent on file). These only tune cadence when it IS active.
-const DEFAULT_CONTENT_POLL_INTERVAL_SECONDS = 4;
+// Lowered 4 -> 2.5: the capture loop is a sampler with no keyboard/submit hook,
+// so a shorter interval directly reduces how many quick searches fall between
+// two samples. The address-bar UIA read is cached per (app, window title) so a
+// faster poll does not mean proportionally more PowerShell spawns.
+const DEFAULT_CONTENT_POLL_INTERVAL_SECONDS = 2.5;
 // Lowered 30 -> 15 so a captured search/prompt reaches the server within ~15s of
 // being emitted. At ~7 agents this is ~1 small POST per agent per 15s — trivial.
 const DEFAULT_CONTENT_FLUSH_INTERVAL_SECONDS = 15;

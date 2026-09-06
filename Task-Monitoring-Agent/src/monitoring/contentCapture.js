@@ -19,9 +19,23 @@
 // capture candidate, gated only by search-field detection.
 //
 // When it emits:
-//   - debounced: it tracks the current query text and emits the last non-empty
-//     value when the field clears, the host changes, or the browser loses
-//     focus — i.e. on submit / navigation, approximated without a keyboard hook.
+//   - Without a keyboard / form-submit hook, "a query was committed" is
+//     inferred. reduceQuery() emits a query when ANY of these happen:
+//       * the field clears (was non-empty, now empty), OR
+//       * the target changes (host / app / kind), OR
+//       * focus leaves the browser, OR
+//       * the text sat UNCHANGED for >= STABLE_TICKS polls and then changed
+//         (the user stopped typing it — almost always because they submitted),
+//         OR
+//       * the text changed to a value that is NOT a continuation of the old
+//         one (not old+suffix, not old-minus-suffix) — the old value was a
+//         separate query.
+//     A per-target guard (emittedForKey) prevents emitting the same text twice
+//     within one field session. This captures back-to-back searches on the
+//     SAME site, which the old "only on clear / target change" rule silently
+//     dropped (only the last survived).
+//   - A failed host read does NOT discard the pending query — it is held and
+//     retried on the next tick.
 //
 // Everything here is INERT until contentPipeline.setActive(true), which the
 // tracker only does when the heartbeat reports content_capture.active === true.
@@ -137,46 +151,113 @@ function looksPrivate(windowTitle) {
     return PRIVATE_MARKERS.some((re) => re.test(windowTitle));
 }
 
+// How many consecutive polls the field text must sit unchanged before a
+// subsequent change is treated as "the previous value was a committed query".
+// At the default 2.5s poll interval this is ~5s of a stable, non-empty search
+// box — in practice that means the user submitted it and is now looking at
+// results / starting a new query.
+const STABLE_TICKS = 2;
+
+/** Is `b` a continuation of `a` (a typed further, or a backspaced)? */
+function isContinuation(a, b) {
+    if (!a || !b) return false;
+    return b.startsWith(a) || a.startsWith(b);
+}
+
 /**
- * Debounce reducer. Given the previous capture state and the current reading,
- * decide whether to emit and what the new pending value is.
+ * Query-log reducer. Given the previous capture state and the current reading,
+ * decide whether a committed query should be emitted and compute the next
+ * state. Emits EVERY distinct committed query (see the module header), not just
+ * the last one per field session.
  *
- * Emits the last non-empty `pending` when:
- *   - the field has cleared (was non-empty, now empty), OR
- *   - the target changed (host/app), OR
- *   - focus left the browser (currentText === null).
- *
- * @param {{ pending:string, targetKey:string }} prev
+ * @param {{ pending:string, targetKey:string, stableCount?:number, emittedForKey?:string }} prev
  * @param {{ text:string|null, targetKey:string|null }} cur
- * @returns {{ emit:string|null, state:{ pending:string, targetKey:string } }}
+ * @returns {{ emit:string|null, state:{ pending:string, targetKey:string, stableCount:number, emittedForKey:string } }}
  */
 function reduceQuery(prev, cur) {
     const prevPending = prev.pending || "";
     const prevKey = prev.targetKey || "";
+    const prevStable = prev.stableCount || 0;
+    const prevEmitted = prev.emittedForKey || "";
     const curText = typeof cur.text === "string" ? cur.text.trim() : null;
     const curKey = cur.targetKey || "";
 
-    // Target switched (or focus lost) — flush whatever we had.
+    const flushable = prevPending && prevPending !== prevEmitted ? prevPending : null;
+
+    // Target switched (or focus lost) — flush whatever we had, start fresh.
     if (curKey !== prevKey) {
         return {
-            emit: prevPending || null,
-            state: { pending: curText || "", targetKey: curKey },
+            emit: flushable,
+            state: {
+                pending: curText || "",
+                targetKey: curKey,
+                stableCount: 0,
+                emittedForKey: "",
+            },
         };
     }
 
-    // Same target: field cleared -> the user submitted / navigated away.
+    // Same target, field cleared -> the user submitted / navigated away.
     if (prevPending && (curText === "" || curText === null)) {
-        return { emit: prevPending, state: { pending: "", targetKey: curKey } };
+        return {
+            emit: flushable,
+            state: { pending: "", targetKey: curKey, stableCount: 0, emittedForKey: "" },
+        };
     }
 
-    // Same target, still typing / unchanged.
+    // Same target, text unchanged & non-empty -> it's sitting there; count it.
+    if (curText && curText === prevPending) {
+        return {
+            emit: null,
+            state: {
+                pending: prevPending,
+                targetKey: curKey,
+                stableCount: prevStable + 1,
+                emittedForKey: prevEmitted,
+            },
+        };
+    }
+
+    // Same target, text changed to a different non-empty value. Was the old
+    // value a committed query? Yes if it sat stable long enough (user stopped
+    // -> almost certainly submitted), or if the new text is a clean divergence
+    // from a non-trivial old value (not a continuation, old value >= 3 chars —
+    // so rapid retyping of a 1-2 char fragment doesn't produce a stray row).
+    if (curText) {
+        const committed =
+            Boolean(flushable) &&
+            (prevStable >= STABLE_TICKS ||
+                (prevPending.length >= 3 && !isContinuation(prevPending, curText)));
+        return {
+            emit: committed ? flushable : null,
+            state: {
+                pending: curText,
+                targetKey: curKey,
+                stableCount: 0,
+                emittedForKey: committed ? prevPending : prevEmitted,
+            },
+        };
+    }
+
+    // curText is null but the key didn't change (shouldn't normally happen) —
+    // hold everything.
     return {
         emit: null,
-        state: { pending: curText || prevPending, targetKey: curKey },
+        state: {
+            pending: prevPending,
+            targetKey: curKey,
+            stableCount: prevStable,
+            emittedForKey: prevEmitted,
+        },
     };
 }
 
 const WARN_EVERY_MS = 5 * 60 * 1000;
+// If a pending query can't be classified for this long (host unreadable the
+// whole time, etc.) flush it anyway with the last-known attribution rather than
+// hold it forever or lose it on a later reset.
+const MAX_PENDING_HOLD_MS = 120 * 1000;
+const EMPTY_STATE = { pending: "", targetKey: "", stableCount: 0, emittedForKey: "" };
 
 /**
  * Start the capture loop.
@@ -190,12 +271,12 @@ const WARN_EVERY_MS = 5 * 60 * 1000;
  * @returns {{ stop:Function }}
  */
 function startContentCapture(p) {
-    const intervalMs = (p.config.contentPollIntervalSeconds || 4) * 1000;
+    const intervalMs = (p.config.contentPollIntervalSeconds || 2.5) * 1000;
     const resolveBlocklist =
         typeof p.blocklistPatterns === "function"
             ? p.blocklistPatterns
             : () => p.blocklistPatterns;
-    let state = { pending: "", targetKey: "" };
+    let state = { ...EMPTY_STATE };
     // Attribution for the LAST field we were capturing from — kept across state
     // resets so a flush triggered by leaving that field/site still records the
     // right app + host + kind.
@@ -203,11 +284,21 @@ function startContentCapture(p) {
     let running = false;
     let consecutiveMisses = 0;
     let lastWarnAt = 0;
+    let hostMissStreak = 0;
+    let lastHostWarnAt = 0;
+    let pendingSince = 0; // when the current `state.pending` first appeared
+
+    function noteState(next) {
+        const hadPending = Boolean(state.pending);
+        state = next;
+        if (state.pending && !hadPending) pendingSince = Date.now();
+        else if (!state.pending) pendingSince = 0;
+    }
 
     // Flush any pending query, attributing it to the last active field.
     function flushPending(cur) {
         const r = reduceQuery(state, cur);
-        state = r.state;
+        noteState(r.state);
         if (r.emit) flush(r.emit, last.app, last.domain, last.kind);
     }
 
@@ -217,11 +308,28 @@ function startContentCapture(p) {
         try {
             const fg = await p.getForeground();
 
-            // Not a browser / no host / focus elsewhere -> flush pending.
-            if (!fg || !fg.isBrowser || !fg.host) {
+            // Definitely not in a browser (or nothing is focused) — the user
+            // has left; safe to flush whatever was pending.
+            if (!fg || !fg.isBrowser) {
                 flushPending({ text: null, targetKey: null });
+                hostMissStreak = 0;
                 return;
             }
+
+            // In a browser, but the tab's host could not be read THIS tick
+            // (transient UIA / address-bar miss). Do NOT discard the pending
+            // query — hold it and try again next tick. Force it out only if it
+            // has been stuck unclassifiable for too long.
+            if (!fg.host) {
+                hostMissStreak += 1;
+                maybeWarnHost(fg.applicationName);
+                if (state.pending && pendingSince && Date.now() - pendingSince > MAX_PENDING_HOLD_MS) {
+                    flush(state.pending, last.app, last.domain, last.kind);
+                    noteState({ ...EMPTY_STATE });
+                }
+                return;
+            }
+            hostMissStreak = 0;
 
             if (
                 looksPrivate(fg.windowTitle) ||
@@ -255,7 +363,7 @@ function startContentCapture(p) {
 
             const key = `${fg.applicationName}|${fg.host}|${target.kind}`;
             const r = reduceQuery(state, { text: field.text, targetKey: key });
-            state = r.state;
+            noteState(r.state);
             if (r.emit) flush(r.emit, last.app, last.domain, last.kind);
             last = { app: fg.applicationName, domain: fg.host, kind: target.kind };
         } catch (err) {
@@ -291,6 +399,21 @@ function startContentCapture(p) {
         );
     }
 
+    // Distinct from maybeWarn(): this fires when the browser is foreground but
+    // the ADDRESS BAR / host can't be read at all, which aborts capture for the
+    // tick before any field is even looked at. Previously silent.
+    function maybeWarnHost(appName) {
+        if (hostMissStreak < 3) return;
+        const now = Date.now();
+        if (now - lastHostWarnAt < WARN_EVERY_MS) return;
+        lastHostWarnAt = now;
+        logger.warn(
+            `Content capture: ${hostMissStreak} consecutive address-bar reads failed for ` +
+            `${appName || "a browser"} — the active site could not be identified, so capture ` +
+            `is paused until it recovers.`,
+        );
+    }
+
     tick();
     const timer = setInterval(tick, intervalMs);
     if (timer.unref) timer.unref();
@@ -298,8 +421,11 @@ function startContentCapture(p) {
     return {
         stop() {
             clearInterval(timer);
-            // Flush a final pending value on a clean stop.
-            if (state.pending) flush(state.pending, last.app, last.domain, last.kind);
+            // Flush a final pending value on a clean stop (unless it was already
+            // emitted for this field session).
+            if (state.pending && state.pending !== state.emittedForKey) {
+                flush(state.pending, last.app, last.domain, last.kind);
+            }
         },
         // Test seam: run one poll synchronously (the loop is otherwise driven by
         // the interval). Not used in production.
