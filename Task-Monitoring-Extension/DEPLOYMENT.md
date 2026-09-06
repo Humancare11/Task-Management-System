@@ -127,6 +127,33 @@ HKCU\Software\Microsoft\Edge\NativeMessagingHosts\co.humancareconnect.monitoring
 - Everything downstream (consent version check, blocklist re-check, encryption,
   retention, audit) is exactly the same as the agent's own UIA capture path.
 
+## Single machine (testing, from source)
+
+No key, no store, no policy needed:
+
+```powershell
+# 1. build the extension
+cd Task-Monitoring-Extension
+npm install; npm run build          # -> dist\
+
+# 2. load dist\ unpacked in Chrome (chrome://extensions, Developer mode,
+#    Load unpacked) and in Edge (edge://extensions). Copy each shown ID.
+
+# 3. register the native messaging host for this user
+cd native-host
+.\install.ps1 -ChromeId <chrome-id> -EdgeId <edge-id>
+
+# 4. restart Chrome AND Edge completely (close every window)
+
+# 5. start the updated agent from source
+cd ..\..\Task-Monitoring-Agent
+npm install; npm start
+```
+
+`.\uninstall.ps1` removes the registration.
+
+---
+
 ## Verifying on one machine
 
 1. Agent running, extension force-installed, heartbeat shows capture active.
