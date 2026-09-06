@@ -16,8 +16,8 @@ test("consent document exports a sortable version, a title, and non-trivial text
   assert.ok(doc.CONTENT_CONSENT_DOCUMENT_TEXT.length > 400);
 });
 
-test("v2: version reflects the widened (all-site) scope", () => {
-  assert.equal(doc.CONTENT_CONSENT_DOCUMENT_VERSION, "2026-09-04.v2");
+test("v3: version reflects the browser-extension mechanism", () => {
+  assert.equal(doc.CONTENT_CONSENT_DOCUMENT_VERSION, "2026-09-06.v3");
 });
 
 test("the notice covers what it must (search + prompts, exclusions, choice)", () => {
@@ -31,6 +31,17 @@ test("the notice covers what it must (search + prompts, exclusions, choice)", ()
     "deleted",
     "decline",
     "withdraw",
+  ]) {
+    assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
+  }
+});
+
+test("v3: the notice discloses the browser extension and its broad permission", () => {
+  const t = doc.CONTENT_CONSENT_DOCUMENT_TEXT.toLowerCase();
+  for (const phrase of [
+    "browser extension",
+    "read your data on all websites",
+    "only ever reads a search box",
   ]) {
     assert.ok(t.includes(phrase), `notice should mention "${phrase}"`);
   }
