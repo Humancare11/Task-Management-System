@@ -53,6 +53,7 @@ const {
 } = require("./monitoring/contentPipeline");
 const contentCaptureRunner = require("./monitoring/contentCaptureRunner");
 const { decideContentAction } = require("./monitoring/contentConsentDecision");
+const extensionBridge = require("./monitoring/extension/bridgeServer");
 const liveScreenController = require("./monitoring/liveScreen/liveScreenController");
 const screenshotController = require("./monitoring/screenshot/screenshotController");
 const { postConsent } = require("./api/contentClient");
@@ -211,6 +212,15 @@ function startMonitoring(config) {
         logger.error(`Content pipeline failed to start: ${err.message}`);
     }
 
+    // Browser-extension bridge — listens on a local pipe for the extension's
+    // native-messaging host. Inert until applyContentSignal enables it (same
+    // gate as the UIA capture loop). Feeds the same content pipeline.
+    try {
+        extensionBridge.start();
+    } catch (err) {
+        logger.error(`Extension bridge failed to start: ${err.message}`);
+    }
+
     startHeartbeatLoop(config, (kind, result) => {
         if (!monitoringStarted) return;
         if (kind === "ok") setTrayState("MONITORING");
@@ -248,6 +258,7 @@ function startMonitoring(config) {
 //   becomes active.
 let lastConsentPromptedVersion = null;
 let lastConsentDocument = null; // { version, title, text } from the last heartbeat that needed it
+let lastBlocklistPatterns = []; // most recent server blocklist, shared with the extension bridge
 
 function applyContentSignal(config, signal) {
     const decision = decideContentAction(signal, {
@@ -256,10 +267,11 @@ function applyContentSignal(config, signal) {
     });
 
     // Push the server's blocklist (hardcoded ∪ operator-tunable DB list) to the
-    // capture runner regardless of the on/off decision — it's cheap and keeps
-    // the list fresh for the next start.
+    // capture runner AND the extension bridge regardless of the on/off decision
+    // — it's cheap and keeps the list fresh for the next start.
     if (signal && Array.isArray(signal.blocklist_patterns)) {
         contentCaptureRunner.setPolicy({ blocklistPatterns: signal.blocklist_patterns });
+        lastBlocklistPatterns = signal.blocklist_patterns;
     }
 
     // Server couldn't determine the state this heartbeat — leave everything
@@ -280,12 +292,14 @@ function applyContentSignal(config, signal) {
         updateContentConfig(config);
         setContentActive(true);
         contentCaptureRunner.start(config);
+        extensionBridge.setState({ enabled: true, blocklist: lastBlocklistPatterns });
         return;
     }
 
     // capture off
     if (setContentActive) setContentActive(false);
     contentCaptureRunner.stop();
+    extensionBridge.setState({ enabled: false, blocklist: lastBlocklistPatterns });
 
     if (decision.prompt) {
         promptForConsent(decision.prompt);
@@ -398,6 +412,11 @@ function wirePowerMonitor() {
 async function stopMonitoring() {
     stopHeartbeatLoop();
     contentCaptureRunner.stop();
+    try {
+        extensionBridge.stop();
+    } catch {
+        /* best effort */
+    }
     // End any live-screen session immediately and stop the poll loop.
     try {
         liveScreenController.shutdown();

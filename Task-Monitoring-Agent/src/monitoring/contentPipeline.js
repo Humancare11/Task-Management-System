@@ -22,6 +22,12 @@ const contentClient = require("../api/contentClient");
 
 const MAX_QUEUE = 500;
 const STATS_LOG_EVERY_MS = 5 * 60 * 1000;
+// A search seen by both the browser extension and the UIA fallback loop (or
+// the extension firing on both a form submit and the resulting URL change) is
+// the SAME search — collapse identical (kind, domain, text) within this window.
+// Well under the gap between two genuinely-repeated searches.
+const DEDUPE_WINDOW_MS = 20 * 1000;
+let recentKeys = []; // [{ key, at }]
 
 let config = null;
 let active = false;
@@ -60,6 +66,7 @@ function initContentPipeline(opts = {}) {
     stopped = false;
     stats = { captured: 0, sent: 0, serverDropped: 0, queueDropped: 0 };
     lastStatsLogAt = 0;
+    recentKeys = [];
 }
 
 function updateContentConfig(next) {
@@ -104,20 +111,34 @@ function isActive() {
     return active;
 }
 
+function isDuplicate(key) {
+    const now = Date.now();
+    recentKeys = recentKeys.filter((r) => now - r.at < DEDUPE_WINDOW_MS);
+    if (recentKeys.some((r) => r.key === key)) return true;
+    recentKeys.push({ key, at: now });
+    if (recentKeys.length > 200) recentKeys.splice(0, recentKeys.length - 200);
+    return false;
+}
+
 /**
- * Queue one captured item. No-op unless active. Never throws.
+ * Queue one captured item. No-op unless active. Never throws. Identical
+ * (kind, domain, text) within DEDUPE_WINDOW_MS is dropped (same search seen by
+ * both the extension and the UIA fallback, or the extension firing twice).
  * @param {{ app:string, kind:"search"|"prompt", text:string, domain?:string }} item
  */
 function emitContent(item) {
     if (!active || !item) return;
     const text = typeof item.text === "string" ? item.text.trim() : "";
     if (!text) return;
+    const kind = item.kind === "prompt" ? "prompt" : "search";
+    const domain = item.domain ? String(item.domain).toLowerCase().slice(0, 255) : null;
+    if (isDuplicate(`${kind}|${domain || ""}|${text}`)) return;
     queue.push({
         client_event_id: crypto.randomUUID(),
         app: String(item.app || "Unknown").slice(0, 100),
-        kind: item.kind === "prompt" ? "prompt" : "search",
+        kind,
         text,
-        domain: item.domain ? String(item.domain).toLowerCase().slice(0, 255) : null,
+        domain,
         captured_at: new Date().toISOString(),
     });
     stats.captured += 1;

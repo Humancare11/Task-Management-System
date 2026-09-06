@@ -120,6 +120,16 @@ test("emitContent ignores empty text and clamps fields", () => {
   assert.equal(cp._queueLength(), 1); // only the valid one
 });
 
+test("emitContent de-dupes identical (kind, domain, text) within the window (extension + UIA both saw it)", () => {
+  reset();
+  cp.setActive(true);
+  cp.emitContent({ app: "Google Chrome", kind: "search", text: "wireless mouse", domain: "amazon.com" });
+  cp.emitContent({ app: "Google Chrome", kind: "search", text: "wireless mouse", domain: "amazon.com" }); // dupe
+  cp.emitContent({ app: "Google Chrome", kind: "search", text: "wireless mouse", domain: "bestbuy.com" }); // different site -> kept
+  cp.emitContent({ app: "Google Chrome", kind: "prompt", text: "wireless mouse", domain: "amazon.com" }); // different kind -> kept
+  assert.equal(cp._queueLength(), 3);
+});
+
 test("flushOnce posts the batch and drops accepted ids on ok", async () => {
   reset();
   cp.updateContentConfig({
