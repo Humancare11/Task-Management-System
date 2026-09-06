@@ -20,7 +20,8 @@ function connect() {
     if (port) return;
     try {
         port = chrome.runtime.connectNative(NATIVE_HOST);
-    } catch {
+    } catch (e) {
+        console.warn("[monitoring] connectNative threw:", e && e.message);
         scheduleReconnect();
         return;
     }
@@ -30,16 +31,20 @@ function connect() {
                 enabled: Boolean(msg.enabled),
                 blocklist: Array.isArray(msg.blocklist) ? msg.blocklist : [],
             };
+            console.log("[monitoring] config from agent — enabled:", config.enabled, "blocklist:", config.blocklist.length);
             broadcastConfig();
         }
     });
     port.onDisconnect.addListener(() => {
+        const err = chrome.runtime.lastError;
+        console.warn("[monitoring] native port disconnected:", err && err.message);
         port = null;
         // If the agent turns capture off by dying, stop capturing.
         config = { enabled: false, blocklist: config.blocklist };
         broadcastConfig();
         scheduleReconnect();
     });
+    console.log("[monitoring] native port connected to", NATIVE_HOST);
     // Announce ourselves so the agent pushes current config.
     try {
         port.postMessage({ t: "hello", v: chrome.runtime.getManifest().version });
@@ -106,6 +111,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
                 browser: guessBrowser(),
                 ts: Date.now(),
             });
+            console.log("[monitoring] forwarded", msg.kind, "on", msg.host);
         } catch {
             port = null;
             scheduleReconnect();
