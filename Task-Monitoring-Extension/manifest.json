@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "HumanCare Connect — Monitoring",
+  "version": "1.0.0",
+  "description": "Records search queries and AI-assistant prompts for workplace monitoring, per your organization's disclosed policy. Reads only search/prompt fields — no other page content.",
+  "minimum_chrome_version": "102",
+  "permissions": ["nativeMessaging", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.bundle.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}
