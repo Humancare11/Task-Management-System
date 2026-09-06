@@ -196,3 +196,61 @@ test("network failure holds the batch (does not lose it)", async () => {
     contentClient.postContent = orig;
   }
 });
+
+test("stats: captured / sent / server-dropped / queue-dropped are tracked", async () => {
+  reset();
+  cp.updateContentConfig({
+    contentFlushIntervalSeconds: 30,
+    apiBaseUrl: "http://x",
+    agentUuid: "u",
+    agentSecret: "s",
+  });
+  cp.setActive(true);
+  cp.emitContent({ app: "Chrome", kind: "search", text: "keep one" });
+  cp.emitContent({ app: "Chrome", kind: "search", text: "drop one" });
+  assert.equal(cp._stats().captured, 2);
+
+  const contentClient = require("../src/api/contentClient");
+  const orig = contentClient.postContent;
+  contentClient.postContent = async (_cfg, items) => ({
+    kind: "ok",
+    // the server reports BOTH ids as resolved (stored + dropped-by-policy) so
+    // the agent removes both from its queue; `dropped` says which were not kept
+    acceptedIds: items.map((i) => i.client_event_id),
+    inserted: 1,
+    dropped: [{ client_event_id: items[1].client_event_id, reason: "text_too_long" }],
+  });
+  try {
+    await cp.flushOnce();
+    const s = cp._stats();
+    assert.equal(s.sent, 1);
+    assert.equal(s.serverDropped, 1);
+    assert.equal(cp._queueLength(), 0); // both removed from the queue
+  } finally {
+    contentClient.postContent = orig;
+  }
+});
+
+test("stats: clearing the queue on a hard 403/501 counts as queue-dropped", async () => {
+  reset();
+  cp.updateContentConfig({
+    contentFlushIntervalSeconds: 30,
+    apiBaseUrl: "http://x",
+    agentUuid: "u",
+    agentSecret: "s",
+  });
+  cp.setActive(true);
+  cp.emitContent({ app: "Chrome", kind: "search", text: "a" });
+  cp.emitContent({ app: "Chrome", kind: "search", text: "b" });
+
+  const contentClient = require("../src/api/contentClient");
+  const orig = contentClient.postContent;
+  contentClient.postContent = async () => ({ kind: "disabled", status: 403 });
+  try {
+    await cp.flushOnce();
+    assert.equal(cp._stats().queueDropped, 2);
+    assert.equal(cp.isActive(), false);
+  } finally {
+    contentClient.postContent = orig;
+  }
+});

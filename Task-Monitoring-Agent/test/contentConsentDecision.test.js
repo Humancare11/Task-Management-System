@@ -109,3 +109,23 @@ test("a version bump re-triggers the prompt even if an older version was cached"
   assert.ok(d.prompt);
   assert.equal(d.prompt.version, "2026-11-01.v2");
 });
+
+test("signal.unknown === true (server DB error) -> 'unchanged', do not touch capture or the queue", () => {
+  const d = decideContentAction(
+    { unknown: true, document_version: "2026-09-04.v2" },
+    { hasLocalConsent: NEVER }
+  );
+  assert.equal(d.capture, "unchanged");
+  assert.equal(d.prompt, null);
+  assert.equal(d.cacheConsent, false);
+});
+
+test("signal.unknown does not override a genuine active:true if both were somehow set", () => {
+  // unknown is checked first and wins — a well-formed server never sends both,
+  // but if it did we must not start capturing on an ambiguous signal.
+  const d = decideContentAction(
+    { unknown: true, active: true, document_version: "v" },
+    { hasLocalConsent: NEVER }
+  );
+  assert.equal(d.capture, "unchanged");
+});

@@ -400,6 +400,11 @@ exports.agentHeartbeat = async (req, res) => {
     //     legal gate open AND org enabled AND a matching consent row.
     //   - the full notice text is included only while consent is still needed,
     //     to keep routine heartbeats small.
+    //   - if the DB reads below THROW (pool timeout, deadlock, brief restart)
+    //     we send { unknown: true } instead of a definitive active:false — a
+    //     transient backend hiccup must not turn capture off on the agent and
+    //     make it drop its queue. The agent keeps its last-known state until a
+    //     clean heartbeat says otherwise.
     let contentCapture = {
       active: false,
       legal_gate_open: CONTENT_CAPTURE_LEGALLY_APPROVED,
@@ -448,6 +453,10 @@ exports.agentHeartbeat = async (req, res) => {
       }
     } catch (ccErr) {
       console.error("Heartbeat content-capture check failed:", ccErr);
+      contentCapture = {
+        unknown: true,
+        document_version: CONTENT_CONSENT_DOCUMENT_VERSION,
+      };
     }
 
     // Live Screen signal.

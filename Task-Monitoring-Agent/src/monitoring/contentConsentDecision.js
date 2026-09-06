@@ -20,7 +20,7 @@
  * @param {object} ctx
  * @param {string|null} ctx.promptedVersion       version already shown this session
  * @param {(v:string)=>boolean} ctx.hasLocalConsent
- * @returns {{ capture: "on"|"off", prompt: null|{version:string,title:string,text:string}, cacheConsent: boolean }}
+ * @returns {{ capture: "on"|"off"|"unchanged", prompt: null|{version:string,title:string,text:string}, cacheConsent: boolean }}
  */
 function decideContentAction(signal, ctx) {
   const hasLocalConsent =
@@ -29,6 +29,13 @@ function decideContentAction(signal, ctx) {
 
   if (!signal || typeof signal !== "object") {
     return { capture: "off", prompt: null, cacheConsent: false };
+  }
+
+  // The server could not determine the capture state this heartbeat (a
+  // transient DB error). Keep whatever the agent is already doing — do NOT
+  // turn capture off and drop the queue over a backend blip.
+  if (signal.unknown === true) {
+    return { capture: "unchanged", prompt: null, cacheConsent: false };
   }
 
   if (signal.active === true) {

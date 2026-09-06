@@ -262,6 +262,12 @@ function applyContentSignal(config, signal) {
         contentCaptureRunner.setPolicy({ blocklistPatterns: signal.blocklist_patterns });
     }
 
+    // Server couldn't determine the state this heartbeat — leave everything
+    // exactly as it is (capture running or not, queue intact).
+    if (decision.capture === "unchanged") {
+        return;
+    }
+
     if (decision.capture === "on") {
         if (decision.cacheConsent) {
             // Server confirms consent; mirror it locally so we don't re-prompt.

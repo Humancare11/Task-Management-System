@@ -21,6 +21,7 @@ const logger = require("../utils/logger");
 const contentClient = require("../api/contentClient");
 
 const MAX_QUEUE = 500;
+const STATS_LOG_EVERY_MS = 5 * 60 * 1000;
 
 let config = null;
 let active = false;
@@ -29,11 +30,36 @@ let flushTimer = null;
 let flushing = false;
 let stopped = true;
 
+// Running totals since process start — surfaced in the log so "am I losing
+// searches?" is a number, not a guess. `captured` = emitted by the capture
+// loop; `sent` = accepted by the server; `serverDropped` = rejected by server
+// policy (with a per-reason breakdown logged); `queueDropped` = shed locally
+// (queue overflow, or the queue cleared on a hard gate/consent-off).
+let stats = { captured: 0, sent: 0, serverDropped: 0, queueDropped: 0 };
+let lastStatsLogAt = 0;
+
+function bumpQueueDropped(n) {
+    if (n > 0) stats.queueDropped += n;
+}
+
+function maybeLogStats(force) {
+    const now = Date.now();
+    if (!force && now - lastStatsLogAt < STATS_LOG_EVERY_MS) return;
+    lastStatsLogAt = now;
+    logger.info(
+        `Content capture stats — captured ${stats.captured}, sent ${stats.sent}, ` +
+        `server-dropped ${stats.serverDropped}, queue-dropped ${stats.queueDropped}, ` +
+        `queued now ${queue.length}.`,
+    );
+}
+
 function initContentPipeline(opts = {}) {
     config = opts.config || config;
     queue = [];
     active = false;
     stopped = false;
+    stats = { captured: 0, sent: 0, serverDropped: 0, queueDropped: 0 };
+    lastStatsLogAt = 0;
 }
 
 function updateContentConfig(next) {
@@ -65,8 +91,10 @@ function setActive(next) {
             logger.info(
                 `Content capture disabled — attempting to save ${queue.length} unsent item(s) before dropping the queue.`,
             );
+            bumpQueueDropped(queue.length);
         }
         queue = [];
+        maybeLogStats(true);
     } else {
         logger.info("Content capture active.");
     }
@@ -92,8 +120,12 @@ function emitContent(item) {
         domain: item.domain ? String(item.domain).toLowerCase().slice(0, 255) : null,
         captured_at: new Date().toISOString(),
     });
+    stats.captured += 1;
     if (queue.length > MAX_QUEUE) {
-        queue.splice(0, queue.length - MAX_QUEUE); // drop oldest
+        const shed = queue.length - MAX_QUEUE;
+        queue.splice(0, shed); // drop oldest
+        bumpQueueDropped(shed);
+        logger.warn(`Content queue over capacity — dropped ${shed} oldest unsent item(s).`);
     }
 }
 
@@ -106,18 +138,33 @@ async function flushOnce() {
 
         if (res.kind === "ok") {
             const accepted = new Set(res.acceptedIds || []);
+            const before = queue.length;
             queue = queue.filter((i) => !accepted.has(i.client_event_id));
-            if ((res.dropped || []).length) {
-                logger.info(`Content: server dropped ${res.dropped.length} item(s) by policy.`);
+            stats.sent += Math.max(0, before - queue.length - (res.dropped || []).length);
+            const dropped = res.dropped || [];
+            if (dropped.length) {
+                stats.serverDropped += dropped.length;
+                const byReason = {};
+                for (const d of dropped) {
+                    const reason = (d && d.reason) || "unknown";
+                    byReason[reason] = (byReason[reason] || 0) + 1;
+                }
+                const breakdown = Object.entries(byReason)
+                    .map(([r, n]) => `${r}=${n}`)
+                    .join(", ");
+                logger.info(`Content: server dropped ${dropped.length} item(s) by policy (${breakdown}).`);
             }
+            maybeLogStats(false);
             return res;
         }
         if (res.kind === "disabled") {
             logger.info(
                 `Content capture rejected by server (HTTP ${res.status}) — stopping and clearing the queue.`,
             );
+            bumpQueueDropped(queue.length);
             queue = [];
             active = false;
+            maybeLogStats(true);
             return res;
         }
         if (res.kind === "auth") {
@@ -128,7 +175,12 @@ async function flushOnce() {
             logger.warn(`Content submission failed (${res.kind}${res.status ? " " + res.status : ""}). Held.`);
         }
         // Bounded hold — never let a long outage grow memory without limit.
-        if (queue.length > MAX_QUEUE) queue.splice(0, queue.length - MAX_QUEUE);
+        if (queue.length > MAX_QUEUE) {
+            const shed = queue.length - MAX_QUEUE;
+            queue.splice(0, shed);
+            bumpQueueDropped(shed);
+            logger.warn(`Content queue over capacity during hold — dropped ${shed} oldest item(s).`);
+        }
         return res;
     } finally {
         flushing = false;
@@ -164,6 +216,10 @@ function _queueLength() {
     return queue.length;
 }
 
+function _stats() {
+    return { ...stats };
+}
+
 module.exports = {
     initContentPipeline,
     updateContentConfig,
@@ -174,4 +230,5 @@ module.exports = {
     startContentFlush,
     shutdownContentPipeline,
     _queueLength,
+    _stats,
 };
