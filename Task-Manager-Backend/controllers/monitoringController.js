@@ -1164,7 +1164,7 @@ exports.getMonitoringConsentStatus = async (req, res) => {
     });
     const userIds = [...new Set(agents.map((a) => a.user_id))];
 
-    const [users, consents, orgSettings] = await Promise.all([
+    const [users, allConsents, orgSettings] = await Promise.all([
       userIds.length
         ? User.findAll({
             where: { id: { [Op.in]: userIds } },
@@ -1172,13 +1172,18 @@ exports.getMonitoringConsentStatus = async (req, res) => {
             raw: true,
           })
         : [],
+      // ALL §5b content-consent rows for these users, any version — so we can
+      // tell "never consented" apart from "consented to an OLD version and now
+      // needs to re-accept" (a version bump silently blocks capture for that
+      // user). The LIKE matches the content notice format "YYYY-MM-DD.vN" and
+      // excludes Live Screen consent rows ("YYYY-MM-DD.ls-vN") in the same table.
       userIds.length
         ? MonitoringConsent.findAll({
             where: {
               user_id: { [Op.in]: userIds },
-              document_version: CONTENT_CONSENT_DOCUMENT_VERSION,
+              document_version: { [Op.like]: "____-__-__.v%" },
             },
-            attributes: ["user_id", "accepted_at", "method"],
+            attributes: ["user_id", "document_version", "accepted_at", "method"],
             raw: true,
           })
         : [],
@@ -1189,12 +1194,24 @@ exports.getMonitoringConsentStatus = async (req, res) => {
     ]);
 
     const userById = new Map(users.map((u) => [u.id, u]));
-    const consentByUser = new Map(consents.map((c) => [c.user_id, c]));
+    const currentByUser = new Map();
+    const priorByUser = new Map(); // most recent NON-current version accepted
+    for (const c of allConsents) {
+      if (c.document_version === CONTENT_CONSENT_DOCUMENT_VERSION) {
+        currentByUser.set(c.user_id, c);
+      } else {
+        const existing = priorByUser.get(c.user_id);
+        if (!existing || String(c.document_version) > String(existing.document_version)) {
+          priorByUser.set(c.user_id, c);
+        }
+      }
+    }
 
     const rows = userIds
       .map((uid) => {
         const u = userById.get(uid) || { id: uid };
-        const c = consentByUser.get(uid) || null;
+        const c = currentByUser.get(uid) || null;
+        const prior = priorByUser.get(uid) || null;
         const name =
           `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() ||
           u.email ||
@@ -1206,6 +1223,11 @@ exports.getMonitoringConsentStatus = async (req, res) => {
           consented: Boolean(c),
           accepted_at: c ? c.accepted_at : null,
           method: c ? c.method : null,
+          // true when the ONLY reason capture is blocked for this user is that
+          // they accepted an earlier notice version and haven't re-accepted the
+          // current one. The agent re-prompts automatically; this surfaces it.
+          needs_reconsent: Boolean(!c && prior),
+          prior_consent_version: prior ? prior.document_version : null,
         };
       })
       .sort(
